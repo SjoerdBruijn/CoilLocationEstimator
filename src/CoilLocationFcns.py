@@ -9,26 +9,26 @@ from ezc3d import c3d
 from MarkerSelectionGui import MarkerSelector
 import numpy as np
 
-def select_markers(filename,helmetmarkenames=[],headmarkernames=[],stimpointmarkername=[]):
+def select_markers(filename, coilmarkernames=[], headmarkernames=[], stimpointmarkername=[]):
     """
-    Launches a GUI to select helmet, head, and stimulation point marker names from a C3D file.
+    Launches a GUI to select coil, head, and stimulation point marker names from a C3D file.
     
     Parameters:
         filename (str): Path to the C3D file.
-        helmetmarkenames (list): List of helmet marker names (optional).
+        coilmarkernames (list): List of coil marker names (optional).
         headmarkernames (list): List of head marker names (optional).
         stimpointmarkername (list): List of stimulation point marker names (optional).
     
     Returns:
-        tuple: (helmetmarkenames, headmarkernames, stimpointmarkername) as selected by the user.
+        tuple: (coilmarkernames, headmarkernames, stimpointmarkername) as selected by the user.
     """
     point_data, markernames, firstind = getkindata(filename)
     markerselector = MarkerSelector(point_data[:,:,firstind], markernames,
-                                    helmetmarkenames,
+                                    coilmarkernames,
                                     headmarkernames,
                                     stimpointmarkername)
-    helmetmarkenames,headmarkernames,stimpointmarkername = markerselector.get_marker_names()
-    return helmetmarkenames,headmarkernames,stimpointmarkername
+    coilmarkernames, headmarkernames, stimpointmarkername = markerselector.get_marker_names()
+    return coilmarkernames, headmarkernames, stimpointmarkername
     
 def marker_indices(markernames, names_to_find):
     indices = []
@@ -76,36 +76,36 @@ def getkindata(filename, selectedmarkernames=None):
     return point_data, markernames, firstind
 
 
-def create_coil_data(filename, helmetmarkenames=None, headmarkernames=None, stimpointmarkername=None):
+def create_coil_data(filename, coilmarkernames=None, headmarkernames=None, stimpointmarkername=None):
     """
-    Creates a coil data structure from a C3D file, containing helmet, head, and stimulation point marker data.
+    Creates a coil data structure from a C3D file, containing coil, head, and stimulation point marker data.
 
     Parameters:
         filename (str): Path to the C3D file.
-        helmetmarkenames (list): List of helmet marker names.
+        coilmarkernames (list): List of coil marker names.
         headmarkernames (list): List of head marker names.
         stimpointmarkername (list): List of stimulation point marker names.
 
     Returns:
         dict: Coil data structure with marker names and corresponding data arrays.
     """
-    if helmetmarkenames is None:
-        helmetmarkenames = []
+    if coilmarkernames is None:
+        coilmarkernames = []
     if headmarkernames is None:
         headmarkernames = []
     if stimpointmarkername is None:
         stimpointmarkername = []
     # find first sample where all markers visible
     # make a list of all markers relevant, and find them in the data
-    if (helmetmarkenames == [] or
+    if (coilmarkernames == [] or
         headmarkernames == [] or
         stimpointmarkername == []):
-        helmetmarkenames, headmarkernames, stimpointmarkername = select_markers(filename,helmetmarkenames,headmarkernames,stimpointmarkername)
-    allmarkernames = headmarkernames+helmetmarkenames+stimpointmarkername
+        coilmarkernames, headmarkernames, stimpointmarkername = select_markers(filename, coilmarkernames, headmarkernames, stimpointmarkername)
+    allmarkernames = headmarkernames + coilmarkernames + stimpointmarkername
     point_data, markernames, firstind = getkindata(filename, allmarkernames)
     # create coil data structure
     coildatastructure = {
-        "helmetrefdata": {"names": helmetmarkenames},
+        "coilrefdata": {"names": coilmarkernames},
         "headrefdata": {"names": headmarkernames},
         "stimpointrefdata": {"names": stimpointmarkername}
     }
@@ -127,16 +127,16 @@ def get_coil_displacement(expfilename, coildatastructure):
 
     Returns:
         tuple: (coildisplacement, coildatastructure)
-            coildisplacement (dict): Displacement data for head and helmet markers, and calculated stimulation points.
+            coildisplacement (dict): Displacement data for head and coil markers, and calculated stimulation points.
             coildatastructure (dict): Updated coil data structure.
     """
     
     if coildatastructure["headrefdata"]["names"]==[]: #TODO
-        _, coildatastructure["headrefdata"]["names"], _ = select_markers(expfilename, coildatastructure["helmetrefdata"]["names"],coildatastructure["headrefdata"]["names"],coildatastructure["stimpointrefdata"]["names"])
+        _, coildatastructure["headrefdata"]["names"], _ = select_markers(expfilename, coildatastructure["coilrefdata"]["names"],coildatastructure["headrefdata"]["names"],coildatastructure["stimpointrefdata"]["names"])
 
         
     allmarkernames = coildatastructure["headrefdata"]["names"] + \
-        coildatastructure["helmetrefdata"]["names"] + \
+        coildatastructure["coilrefdata"]["names"] + \
         coildatastructure["stimpointrefdata"]["names"]
     point_data, markernames, firstind = getkindata(expfilename, allmarkernames)
 
@@ -148,20 +148,20 @@ def get_coil_displacement(expfilename, coildatastructure):
     else:
         print('using previously calculated head data as reference')
     headrefdata = coildatastructure["headrefdata"]["data"]
-    helmetrefdata = coildatastructure["helmetrefdata"]["data"]
+    coilrefdata = coildatastructure["coilrefdata"]["data"]
     point = coildatastructure["stimpointrefdata"]["data"]
 
     # get exp data
     coildisplacement = dict()
-    for key in ["headrefdata", "helmetrefdata"]:
+    for key in ["headrefdata", "coilrefdata"]:
         index = marker_indices(markernames, coildatastructure[key]["names"])
         coildisplacement[key] = point_data.transpose(2, 0, 1)[:, 0:3, index]
 
     # calculate stim point during exp
-    coildisplacement['coilR'], coildisplacement["helmetstimpoint"],_ ,_= rigidbodytransform(
-        helmetrefdata, coildisplacement["helmetrefdata"], point)
+    coildisplacement['coilR'], coildisplacement["coilstimpoint"],_ ,_= rigidbodytransform(
+        coilrefdata, coildisplacement["coilrefdata"], point)
     coildisplacement['headR'], coildisplacement["headstimpoint"],_,_ = rigidbodytransform(
-        headrefdata, coildisplacement["headrefdata"], coildisplacement["helmetstimpoint"][firstind])
+        headrefdata, coildisplacement["headrefdata"], coildisplacement["coilstimpoint"][firstind])
 
     return coildisplacement, coildatastructure
 
@@ -281,4 +281,3 @@ def rigidbodytransform(A, B, virt_marker=None):
 
 
     return R, virt_marker_in_B, t , rmsd
-

@@ -8,7 +8,7 @@ Example script for running coil location estimation and animation.
 
 This script demonstrates how to:
 - Define reference and experimental C3D files
-- Specify marker names for helmet, head, and stimulation point
+- Specify marker names for coil, head, and stimulation point
 - Create a coil data structure from the reference file
 - Compute coil displacement using the experimental file
 - Visualize the results with the AnimationApp
@@ -40,13 +40,13 @@ from CoilLocationAnimationApp import AnimationApp
 
 # Reference C3D file and marker names
 reffilename = "Jen Cal 05.c3d"
-helmetmarkenames = ['LHELM', 'RHELM', 'REARHELM1', 'REARHELM2', 'REARHELM3', 'REARHELM4']
+coilmarkernames = ['LHELM', 'RHELM', 'REARHELM1', 'REARHELM2', 'REARHELM3', 'REARHELM4']
 stimpointmarkername = ['*6']
 headmarkernames = ["LHEAD", "RHEAD", "NASION"]
 
 # Create coil data structure from reference file
 coildatastructure = clf.create_coil_data(
-    reffilename, helmetmarkenames, headmarkernames, stimpointmarkername)
+    reffilename, coilmarkernames, headmarkernames, stimpointmarkername)
 
 # Experimental C3D file
 expfilename = "Jen Cal 08.c3d"

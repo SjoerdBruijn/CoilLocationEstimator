@@ -22,7 +22,7 @@ class EstimatorGUI:
 
         # Initialize the Tkinter window
         self.root = tk.Tk()
-        self.root.title("Helmet Data GUI")
+        self.root.title("Coil Data GUI")
         
         # File selection section
         self.file1_btn = tk.Button(self.root, text="Select reference file", command=self.select_ref_file)
@@ -38,8 +38,8 @@ class EstimatorGUI:
         self.file2_label.grid(row=1, column=1, padx=10, pady=10)
         
         # Functionality section
-        self.create_helmet_btn = tk.Button(self.root, text="Create Helmet Data Structure", command=self.create_coildatastructure)
-        self.create_helmet_btn.grid(row=2, column=0, columnspan=2, padx=10, pady=10)
+        self.create_coil_btn = tk.Button(self.root, text="Create Coil Data Structure", command=self.create_coildatastructure)
+        self.create_coil_btn.grid(row=2, column=0, columnspan=2, padx=10, pady=10)
         
         self.calculate_btn = tk.Button(self.root, text="Calculate Experimental File", command=self.calculate_coil_displacement)
         self.calculate_btn.grid(row=3, column=0, columnspan=2, padx=10, pady=10)
@@ -81,7 +81,6 @@ class EstimatorGUI:
 
 if __name__ == "__main__":
     EstimatorGUI()
-
 
 
 

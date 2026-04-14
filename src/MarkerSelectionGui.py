@@ -56,7 +56,7 @@ class MarkerSelector:
         self.toolbar.pack_forget()  # Hide the toolbar
 
         # Buttons 
-        self.button1 = tk.Button(self.master, text="Select helmet markers", command=self.select_set1, bg='red',fg='red')
+        self.button1 = tk.Button(self.master, text="Select coil markers", command=self.select_set1, bg='red',fg='red')
         self.button1.pack(side=tk.LEFT)
 
         self.button2 = tk.Button(self.master, text="Select head markers", command=self.select_set2, bg='green',fg='green')
@@ -232,4 +232,3 @@ def set_axes_equal(ax):
 
 # # Initialize the MarkerSelector object with the data
 # app = MarkerSelector(markers, markernames,selected_markers_set1,selected_markers_set2,selected_markers_set3)
-

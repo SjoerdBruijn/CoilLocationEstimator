@@ -19,9 +19,9 @@ class AnimationApp:
     Attributes:
         root (tkinter.Tk): The root window of the application.
         head (numpy.ndarray): The head reference data.
-        helmet (numpy.ndarray): The helmet reference data.
+        coil (numpy.ndarray): The coil reference data.
         headstimpoint (numpy.ndarray): The head stimulation point data.
-        helmetstimpoint (numpy.ndarray): The helmet stimulation point data.
+        coilstimpoint (numpy.ndarray): The coil stimulation point data.
         dist (numpy.ndarray): The distance between two coil midpoints.
         is_paused (bool): Flag indicating whether the animation is paused.
         current_frame (int): The current frame of the animation.
@@ -32,9 +32,9 @@ class AnimationApp:
         ax2 (matplotlib.axes.Axes): The 3D subplot.
         line (matplotlib.lines.Line2D): The line representing the distance between two coil midpoints.
         scat1 (mpl_toolkits.mplot3d.art3d.Path3DCollection): The scatter plot for head markers.
-        scat2 (mpl_toolkits.mplot3d.art3d.Path3DCollection): The scatter plot for helmet markers.
+        scat2 (mpl_toolkits.mplot3d.art3d.Path3DCollection): The scatter plot for coil markers.
         scat3 (mpl_toolkits.mplot3d.art3d.Path3DCollection): The scatter plot for head stimulation points.
-        scat4 (mpl_toolkits.mplot3d.art3d.Path3DCollection): The scatter plot for helmet stimulation points.
+        scat4 (mpl_toolkits.mplot3d.art3d.Path3DCollection): The scatter plot for coil stimulation points.
         canvas (matplotlib.backends.backend_tkagg.FigureCanvasTkAgg): The canvas for embedding the plot in Tkinter.
         play_button (ttk.Button): The button for playing the animation.
         pause_button (ttk.Button): The button for pausing the animation.
@@ -55,10 +55,10 @@ class AnimationApp:
 
         #data 
         self.head=coildatastruct["headrefdata"]
-        self.helmet=coildatastruct["helmetrefdata"]
+        self.coil=coildatastruct["coilrefdata"]
         self.headstimpoint=coildatastruct["headstimpoint"]
-        self.helmetstimpoint=coildatastruct["helmetstimpoint"]
-        self.dist=coildatastruct["helmetstimpoint"][:,:,0]-coildatastruct["headstimpoint"][:,:,0]
+        self.coilstimpoint=coildatastruct["coilstimpoint"]
+        self.dist=coildatastruct["coilstimpoint"][:,:,0]-coildatastruct["headstimpoint"][:,:,0]
 
         # Initialize variables
         self.is_paused = True
@@ -80,9 +80,9 @@ class AnimationApp:
 
         # 3D scatter plot data
         self.scat1 = self.ax2.scatter(self.head[0,0,:], self.head[0,1,:], self.head[0,2,:], c='r', marker='*', label='Head Markers')
-        self.scat2 = self.ax2.scatter(self.helmet[0,0,:], self.helmet[0,1,:], self.helmet[0,2,:], c='b', marker='*', label='Helmet Markers')
+        self.scat2 = self.ax2.scatter(self.coil[0,0,:], self.coil[0,1,:], self.coil[0,2,:], c='b', marker='*', label='Coil Markers')
         self.scat3 = self.ax2.scatter(self.headstimpoint[0,0,:], self.headstimpoint[0,1,:], self.headstimpoint[0,2,:], c='r', marker='o', label='Head stimpoint')
-        self.scat4 = self.ax2.scatter(self.helmetstimpoint[0,0,:], self.helmetstimpoint[0,1,:], self.helmetstimpoint[0,2,:], c='b', marker='o', label='Helmet stimpoint')
+        self.scat4 = self.ax2.scatter(self.coilstimpoint[0,0,:], self.coilstimpoint[0,1,:], self.coilstimpoint[0,2,:], c='b', marker='o', label='Coil stimpoint')
         
         set_axes_equal(self.ax2)
         # self.scat3 = self.ax2.scatter(self.x3d + 0.2, self.y3d + 0.2, self.z3d + 0.2, c='b', marker='^', label='Data Set 3')
@@ -151,9 +151,9 @@ class AnimationApp:
         
         #  # Update 3D scatter plot
         self.scat1._offsets3d = (self.head [self.current_frame,0,:], self.head [self.current_frame,1,:], self.head [self.current_frame,2,:])
-        self.scat2._offsets3d = (self.helmet [self.current_frame,0,:], self.helmet [self.current_frame,1,:], self.helmet [self.current_frame,2,:])
+        self.scat2._offsets3d = (self.coil [self.current_frame,0,:], self.coil [self.current_frame,1,:], self.coil [self.current_frame,2,:])
         self.scat3._offsets3d = (self.headstimpoint [self.current_frame,0,:], self.headstimpoint [self.current_frame,1,:], self.headstimpoint [self.current_frame,2,:])
-        self.scat4._offsets3d = (self.helmetstimpoint [self.current_frame,0,:], self.helmetstimpoint [self.current_frame,1,:], self.helmetstimpoint [self.current_frame,2,:])
+        self.scat4._offsets3d = (self.coilstimpoint [self.current_frame,0,:], self.coilstimpoint [self.current_frame,1,:], self.coilstimpoint [self.current_frame,2,:])
         
         return self.line#, self.scat1, self.scat2, self.scat3
     
