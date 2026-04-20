@@ -13,7 +13,8 @@ except ImportError:  # pragma: no cover - depends on local environment
     StreamInlet = None
     resolve_streams = None
 
-
+# todo; proper behaviour when head tracking window is closed while tracking is active (currently just stops tracking and shows error in status)
+# todo; logic of stimpoint for ref in head an coil coordinates does not seem correct yet
 class RealtimeGUI:
     def __init__(self):
         self.reffilename = None
@@ -24,6 +25,7 @@ class RealtimeGUI:
         self.animation_app = None
         self.tracking_active = False
         self.poll_job = None
+        self.poll_interval_ms = 5
 
         self.root = tk.Tk()
         self.root.title("Realtime Coil Data GUI")
@@ -178,7 +180,7 @@ class RealtimeGUI:
     def _schedule_poll(self):
         if self.poll_job is not None:
             self.root.after_cancel(self.poll_job)
-        self.poll_job = self.root.after(20, self.poll_lsl)
+        self.poll_job = self.root.after(self.poll_interval_ms, self.poll_lsl)
 
     def poll_lsl(self):
         if not self.tracking_active or self.inlet is None:
@@ -186,6 +188,7 @@ class RealtimeGUI:
             return
 
         processed_sample = False
+        outdata_batch = []
         while True:
             sample, _ = self.inlet.pull_sample(timeout=0.0)
             if sample is None:
@@ -199,9 +202,10 @@ class RealtimeGUI:
                 self.stop_tracking()
                 self.set_status(str(exc))
                 return
-            self.animation_app.append_frame(outdata)
+            outdata_batch.append(outdata)
 
         if processed_sample:
+            self.animation_app.append_frames(outdata_batch)
             self.set_status("Receiving live LSL data.")
         self._schedule_poll()
 

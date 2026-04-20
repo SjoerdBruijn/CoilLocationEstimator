@@ -206,7 +206,13 @@ class MarkerSelector:
         return self.selected_markers_set1, self.selected_markers_set2, self.selected_markers_set3
     def done(self):
         plt.close(self.fig)
-        self.master.quit()
+        if not self._owns_mainloop:
+            try:
+                self.master.grab_release()
+            except tk.TclError:
+                pass
+        else:
+            self.master.quit()
         self.master.destroy()
 
 def set_axes_equal(ax):

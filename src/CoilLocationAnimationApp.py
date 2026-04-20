@@ -70,6 +70,8 @@ class AnimationApp:
         self.current_frame = 0
         self.num_frames = max(np.shape(self.head)[0], 1)
         self.slider_moving = False  # Flag to prevent recursive slider updates
+        self.live_history_limit = 500
+        self.slider_update_stride = 5
         
         # Create the matplotlib figure and axis
         self.fig = Figure(figsize=(10, 5))  # Use Figure instead of plt.figure()
@@ -77,7 +79,7 @@ class AnimationApp:
         self.ax2 = self.fig.add_subplot(122, projection='3d')  # 3D subplot
 
         # Time series data
-        self.line= self.ax1.plot(self.dist, label='Distance between two coil midpoints')
+        self.line = self.ax1.plot(self.dist, label='Distance between two coil midpoints')
         self.ax1.set_title('Time Series Plot')
         self.ax1.set_xlabel('Time (samples)')
         self.ax1.set_ylabel('Distance (mm)')
@@ -96,7 +98,7 @@ class AnimationApp:
         self.ax2.set_xlabel('X')
         self.ax2.set_ylabel('Y')
         self.ax2.set_zlabel('Z')
-        self.ax2.legend()
+        self.ax2.legend(loc="upper right", bbox_to_anchor=(0.98, 0.98))
 
         # Create a canvas to embed the plot in Tkinter
         self.canvas = FigureCanvasTkAgg(self.fig, master=self.root)
@@ -129,12 +131,11 @@ class AnimationApp:
 
     def _refresh_timeseries(self):
         self.dist = self._compute_dist()
-        self.ax1.cla()
-        self.line = self.ax1.plot(self.dist, label='Distance between two coil midpoints')
-        self.ax1.set_title('Time Series Plot')
-        self.ax1.set_xlabel('Time (samples)')
-        self.ax1.set_ylabel('Distance (mm)')
-        self.ax1.legend()
+        x = np.arange(self.dist.shape[0])
+        for index, line in enumerate(self.line):
+            line.set_data(x, self.dist[:, index])
+        self.ax1.relim()
+        self.ax1.autoscale_view()
     def play(self):
         self.is_paused = False
         self.anim.event_source.start()
@@ -166,9 +167,13 @@ class AnimationApp:
             if not self.live_mode:
                 self.pause()
 
-        if not self.slider_moving:#self.is_paused:         
+        if not self.slider_moving and (
+            frame == 0
+            or frame == self.num_frames - 1
+            or frame % self.slider_update_stride == 0
+        ):
             self.slider_moving = True  # Temporarily disable slider update
-            self.slider.set(self.current_frame)
+            self.slider.set(frame)
             self.slider_moving = False  # Re-enable slider update
             
         self.current_frame = frame
@@ -187,12 +192,34 @@ class AnimationApp:
         """
         Append one live frame and redraw the existing animation window.
         """
-        self.head = np.concatenate((self.head, coildatastruct["headrefdata"]), axis=0)
-        self.coil = np.concatenate((self.coil, coildatastruct["coilrefdata"]), axis=0)
-        self.headstimpoint = np.concatenate((self.headstimpoint, coildatastruct["headstimpoint"]), axis=0)
-        self.coilstimpoint = np.concatenate((self.coilstimpoint, coildatastruct["coilstimpoint"]), axis=0)
+        self.append_frames([coildatastruct])
+
+    def append_frames(self, coildatastructs):
+        """
+        Append multiple live frames and redraw once.
+        """
+        if len(coildatastructs) == 0:
+            return
+
+        self.head = np.concatenate([self.head] + [frame["headrefdata"] for frame in coildatastructs], axis=0)
+        self.coil = np.concatenate([self.coil] + [frame["coilrefdata"] for frame in coildatastructs], axis=0)
+        self.headstimpoint = np.concatenate(
+            [self.headstimpoint] + [frame["headstimpoint"] for frame in coildatastructs],
+            axis=0,
+        )
+        self.coilstimpoint = np.concatenate(
+            [self.coilstimpoint] + [frame["coilstimpoint"] for frame in coildatastructs],
+            axis=0,
+        )
+
+        if self.live_mode and self.head.shape[0] > self.live_history_limit:
+            self.head = self.head[-self.live_history_limit:]
+            self.coil = self.coil[-self.live_history_limit:]
+            self.headstimpoint = self.headstimpoint[-self.live_history_limit:]
+            self.coilstimpoint = self.coilstimpoint[-self.live_history_limit:]
+
         self.num_frames = self.head.shape[0]
-        self.slider.configure(to=self.num_frames-1)
+        self.slider.configure(to=self.num_frames - 1)
         self.current_frame = self.num_frames - 1
         self._refresh_timeseries()
         self.update_plot(self.current_frame)

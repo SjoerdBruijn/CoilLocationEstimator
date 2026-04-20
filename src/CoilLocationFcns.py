@@ -222,12 +222,13 @@ def get_coil_displacement_from_frame(markers, markernames, coildatastructure):
     """
     Computes coil displacement for a single in-memory frame.
     """
-    allmarkernames = (coildatastructure["headrefdata"]["names"] +
-                      coildatastructure["coilrefdata"]["names"] +
-                      coildatastructure["stimpointrefdata"]["names"])
-    all_indices = marker_indices(markernames, allmarkernames)
-    if len(all_indices) != len(allmarkernames):
-        missing = sorted(set(allmarkernames) - set([markernames[i] for i in all_indices]))
+    required_markernames = (
+        coildatastructure["headrefdata"]["names"] +
+        coildatastructure["coilrefdata"]["names"]
+    )
+    all_indices = marker_indices(markernames, required_markernames)
+    if len(all_indices) != len(required_markernames):
+        missing = sorted(set(required_markernames) - set([markernames[i] for i in all_indices]))
         raise ValueError(f"Missing required markers in stream: {missing}")
 
     marker_frame = np.asarray(markers)

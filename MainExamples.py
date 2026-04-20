@@ -59,4 +59,4 @@ coildisplacement, coildatastructure = clf.get_coil_displacement(
 AnimationApp(coildisplacement)
 
 # Optionally launch the GUI (uncomment to use)
-EstimatorGUI()
+# EstimatorGUI()
