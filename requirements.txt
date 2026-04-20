@@ -1,2 +1,3 @@
 ezc3d
 matplotlib
+pylsl

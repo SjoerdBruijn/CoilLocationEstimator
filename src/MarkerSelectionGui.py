@@ -5,10 +5,15 @@ from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk
 import tkinter as tk
 
 class MarkerSelector:
-    def __init__(self, markers, markernames,selected_markers_set1,selected_markers_set2,selected_markers_set3):
+    def __init__(self, markers, markernames,selected_markers_set1,selected_markers_set2,selected_markers_set3, master=None):
         # Create the tkinter window
-
-        self.master = tk.Tk()
+        self._owns_mainloop = master is None
+        if master is None:
+            self.master = tk.Tk()
+        else:
+            self.master = tk.Toplevel(master)
+            self.master.transient(master)
+            self.master.grab_set()
         self.master.title("Select Marker Sets")
 
         # Data
@@ -86,8 +91,11 @@ class MarkerSelector:
         self.zoom_active = False
         self.master.protocol("WM_DELETE_WINDOW", self.done)
 
-        # Run the tkinter main loop
-        self.master.mainloop()
+        # Run the tkinter main loop when used standalone.
+        if self._owns_mainloop:
+            self.master.mainloop()
+        else:
+            self.master.wait_window()
     def update_plot(self):
         """Updates the plot to display the marker coordinates."""
         # Store current limits before clearing

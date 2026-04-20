@@ -49,21 +49,26 @@ class AnimationApp:
         update_plot(self, frame): Updates the time series plot and 3D scatter plot.
     """
 
-    def __init__(self,coildatastruct):
-        self.root =  tk.Tk()
+    def __init__(self,coildatastruct, master=None, auto_mainloop=True, live_mode=False):
+        self.live_mode = live_mode
+        self._owns_mainloop = master is None
+        if master is None:
+            self.root =  tk.Tk()
+        else:
+            self.root = tk.Toplevel(master)
         self.root.title("Animation with Play/Pause and Slider")
 
         #data 
-        self.head=coildatastruct["headrefdata"]
-        self.coil=coildatastruct["coilrefdata"]
-        self.headstimpoint=coildatastruct["headstimpoint"]
-        self.coilstimpoint=coildatastruct["coilstimpoint"]
-        self.dist=coildatastruct["coilstimpoint"][:,:,0]-coildatastruct["headstimpoint"][:,:,0]
+        self.head=np.array(coildatastruct["headrefdata"], copy=True)
+        self.coil=np.array(coildatastruct["coilrefdata"], copy=True)
+        self.headstimpoint=np.array(coildatastruct["headstimpoint"], copy=True)
+        self.coilstimpoint=np.array(coildatastruct["coilstimpoint"], copy=True)
+        self.dist=self._compute_dist()
 
         # Initialize variables
         self.is_paused = True
         self.current_frame = 0
-        self.num_frames = np.shape(self.head)[0]
+        self.num_frames = max(np.shape(self.head)[0], 1)
         self.slider_moving = False  # Flag to prevent recursive slider updates
         
         # Create the matplotlib figure and axis
@@ -113,17 +118,30 @@ class AnimationApp:
         
         # Initialize animation
         self.anim = FuncAnimation(self.fig, self.update_plot, frames=self.frame_generator, interval=50, blit=False, repeat=False)
+        if self.live_mode:
+            self.pause()
 
-        self.root.mainloop()
+        if auto_mainloop and self._owns_mainloop:
+            self.root.mainloop()
+
+    def _compute_dist(self):
+        return self.coilstimpoint[:, :, 0] - self.headstimpoint[:, :, 0]
+
+    def _refresh_timeseries(self):
+        self.dist = self._compute_dist()
+        self.ax1.cla()
+        self.line = self.ax1.plot(self.dist, label='Distance between two coil midpoints')
+        self.ax1.set_title('Time Series Plot')
+        self.ax1.set_xlabel('Time (samples)')
+        self.ax1.set_ylabel('Distance (mm)')
+        self.ax1.legend()
     def play(self):
-        if self.is_paused:
-            self.is_paused = False
-            self.anim.event_source.start()
+        self.is_paused = False
+        self.anim.event_source.start()
     
     def pause(self):
-        if not self.is_paused:
-            self.is_paused = True
-            self.anim.event_source.stop()
+        self.is_paused = True
+        self.anim.event_source.stop()
             
     def frame_generator(self):
     #"""Custom frame generator that starts from the current_frame."""
@@ -140,6 +158,14 @@ class AnimationApp:
             self.slider_moving = False
 
     def update_plot(self, frame):
+        if self.num_frames == 0:
+            return self.line
+
+        if frame >= self.num_frames:
+            frame = self.num_frames - 1
+            if not self.live_mode:
+                self.pause()
+
         if not self.slider_moving:#self.is_paused:         
             self.slider_moving = True  # Temporarily disable slider update
             self.slider.set(self.current_frame)
@@ -156,6 +182,21 @@ class AnimationApp:
         self.scat4._offsets3d = (self.coilstimpoint [self.current_frame,0,:], self.coilstimpoint [self.current_frame,1,:], self.coilstimpoint [self.current_frame,2,:])
         
         return self.line#, self.scat1, self.scat2, self.scat3
+
+    def append_frame(self, coildatastruct):
+        """
+        Append one live frame and redraw the existing animation window.
+        """
+        self.head = np.concatenate((self.head, coildatastruct["headrefdata"]), axis=0)
+        self.coil = np.concatenate((self.coil, coildatastruct["coilrefdata"]), axis=0)
+        self.headstimpoint = np.concatenate((self.headstimpoint, coildatastruct["headstimpoint"]), axis=0)
+        self.coilstimpoint = np.concatenate((self.coilstimpoint, coildatastruct["coilstimpoint"]), axis=0)
+        self.num_frames = self.head.shape[0]
+        self.slider.configure(to=self.num_frames-1)
+        self.current_frame = self.num_frames - 1
+        self._refresh_timeseries()
+        self.update_plot(self.current_frame)
+        self.canvas.draw_idle()
     
     
 def set_axes_equal(ax):
