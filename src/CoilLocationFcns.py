@@ -468,6 +468,109 @@ def save_results(coildisplacement, coildatastructure=None, filename=None):
     return filename
 
 
+def _missing_marker_names(markernames, names_to_find):
+    """
+    Find requested marker names that are absent from an available marker list.
+
+    Args:
+        markernames (list[str]): Available marker labels from a C3D file or LSL
+            stream.
+        names_to_find (list[str]): Required marker labels to check.
+
+    Returns:
+        list[str]: Required marker names that cannot be matched by the same
+            case-insensitive suffix rule used by ``marker_indices``. The input
+            lists are not modified.
+    """
+    missing = []
+    available_names = [marker.split(":")[-1].strip().upper() for marker in markernames]
+    for name in names_to_find:
+        if name.strip().upper() not in available_names:
+            missing.append(name)
+    return missing
+
+
+def _validate_displacement_reference_data(coildatastructure, action_description):
+    """
+    Check that head reference data needed for displacement is present.
+
+    Args:
+        coildatastructure (dict): Coil/head reference structure to validate.
+        action_description (str): Text describing the current action, used in
+            error messages.
+
+    Returns:
+        None: The function only validates data and does not modify the input
+            dictionary.
+
+    Raises:
+        ValueError: If ``headrefdata`` or ``headstimpointrefdata`` is missing.
+    """
+    if coildatastructure["headrefdata"]["data"].size == 0:
+        raise ValueError(f"Create or load head reference data before {action_description}.")
+    if "headstimpointrefdata" not in coildatastructure:
+        raise ValueError(
+            f"Create or load head stimulation point reference data before {action_description}.")
+
+
+def _compute_coil_displacement_from_marker_data(marker_data, markernames, coildatastructure,
+                                                missing_context):
+    """
+    Compute coil displacement from already-loaded marker coordinate arrays.
+
+    Args:
+        marker_data (np.ndarray): Experimental marker coordinates shaped
+            ``n_samples x 3 x n_markers``.
+        markernames (list[str]): Names corresponding to the marker axis of
+            ``marker_data``.
+        coildatastructure (dict): Coil/head reference structure containing coil
+            and head reference markers plus stimulation point reference data.
+        missing_context (str): Human-readable source description used in marker
+            missing-data error messages.
+
+    Returns:
+        dict: Coil displacement dictionary containing head/coil experimental
+            marker arrays, marker names, rigid-body rotations, and transformed
+            coil/head stimulation point trajectories. The input arrays and data
+            structure are not modified.
+
+    Raises:
+        ValueError: If ``marker_data`` has an invalid shape or required markers
+            are not present in ``markernames``.
+    """
+    marker_array = np.asarray(marker_data)
+    if marker_array.ndim != 3 or marker_array.shape[1] != 3:
+        raise ValueError("Expected marker data with shape n_samples x 3 x n_markers.")
+
+    required_markernames = (
+        coildatastructure["headrefdata"]["names"] +
+        coildatastructure["coilrefdata"]["names"]
+    )
+    missing = _missing_marker_names(markernames, required_markernames)
+    if missing:
+        raise ValueError(f"Missing required markers in {missing_context}: {missing}")
+
+    headrefdata = coildatastructure["headrefdata"]["data"]
+    coilrefdata = coildatastructure["coilrefdata"]["data"]
+    coilpoint = coildatastructure["coilstimpointrefdata"]["data"]
+    headpoint = coildatastructure["headstimpointrefdata"]
+
+    coildisplacement = dict()
+    coildisplacement["headmarkernames"] = coildatastructure["headrefdata"]["names"]
+    coildisplacement["coilmarkernames"] = coildatastructure["coilrefdata"]["names"]
+    headindex = marker_indices(markernames, coildatastructure["headrefdata"]["names"])
+    coilindex = marker_indices(markernames, coildatastructure["coilrefdata"]["names"])
+    coildisplacement["headexpdata"] = marker_array[:, 0:3, headindex]
+    coildisplacement["coilexpdata"] = marker_array[:, 0:3, coilindex]
+
+    coildisplacement['coilR'], coildisplacement["coilstimpoint"], _, _ = rigidbodytransform(
+        coilrefdata, coildisplacement["coilexpdata"], coilpoint)
+    coildisplacement['headR'], coildisplacement["headstimpoint"], _, _ = rigidbodytransform(
+        headrefdata, coildisplacement["headexpdata"], headpoint)
+
+    return coildisplacement
+
+
 def get_coil_displacement(expfilename, coildatastructure):
     """
     Compute head and coil motion across an experimental C3D file.
@@ -489,34 +592,14 @@ def get_coil_displacement(expfilename, coildatastructure):
         ValueError: If head reference data or head stimulation point reference
             data are missing.
     """
-    if coildatastructure["headrefdata"]['data'].size == 0:
-        raise ValueError("Create or load head reference data before showing experimental data.")
-    if "headstimpointrefdata" not in coildatastructure:
-        raise ValueError("Create or load head stimulation point reference data before showing experimental data.")
+    _validate_displacement_reference_data(coildatastructure, "showing experimental data")
 
     allmarkernames = coildatastructure["headrefdata"]["names"] + \
         coildatastructure["coilrefdata"]["names"]
     point_data, markernames, _ = getkindata(expfilename, allmarkernames)
-
-    headrefdata = coildatastructure["headrefdata"]["data"]
-    coilrefdata = coildatastructure["coilrefdata"]["data"]
-    coilpoint = coildatastructure["coilstimpointrefdata"]["data"]
-    headpoint = coildatastructure["headstimpointrefdata"]
-
-    # get exp data
-    coildisplacement = dict()
-    coildisplacement["headmarkernames"] = coildatastructure["headrefdata"]["names"]
-    coildisplacement["coilmarkernames"] = coildatastructure["coilrefdata"]["names"]
-    headindex = marker_indices(markernames, coildatastructure["headrefdata"]["names"])
-    coilindex = marker_indices(markernames, coildatastructure["coilrefdata"]["names"])
-    coildisplacement["headexpdata"] = point_data.transpose(2, 0, 1)[:, 0:3, headindex]
-    coildisplacement["coilexpdata"] = point_data.transpose(2, 0, 1)[:, 0:3, coilindex]
-
-    # calculate stim point during exp
-    coildisplacement['coilR'], coildisplacement["coilstimpoint"],_ ,_= rigidbodytransform(
-        coilrefdata, coildisplacement["coilexpdata"], coilpoint)
-    coildisplacement['headR'], coildisplacement["headstimpoint"], _, _ = rigidbodytransform(
-        headrefdata, coildisplacement["headexpdata"], headpoint)
+    marker_data = point_data.transpose(2, 0, 1)[:, 0:3, :]
+    coildisplacement = _compute_coil_displacement_from_marker_data(
+        marker_data, markernames, coildatastructure, "experimental data")
 
     return coildisplacement, coildatastructure
 
@@ -542,41 +625,13 @@ def get_coil_displacement_from_frame(markers, markernames, coildatastructure):
             markers, head reference data, or head stimulation point reference
             data are missing.
     """
-    if coildatastructure["headrefdata"]["data"].size == 0:
-        raise ValueError("Create or load head reference data before live tracking.")
-    if "headstimpointrefdata" not in coildatastructure:
-        raise ValueError("Create or load head stimulation point reference data before live tracking.")
-
-    required_markernames = (
-        coildatastructure["headrefdata"]["names"] +
-        coildatastructure["coilrefdata"]["names"]
-    )
-    all_indices = marker_indices(markernames, required_markernames)
-    if len(all_indices) != len(required_markernames):
-        missing = sorted(set(required_markernames) - set([markernames[i] for i in all_indices]))
-        raise ValueError(f"Missing required markers in stream: {missing}")
+    _validate_displacement_reference_data(coildatastructure, "live tracking")
 
     marker_frame = np.asarray(markers)
     if marker_frame.shape[0] != 3:
         raise ValueError("Expected markers with shape 3 x n_markers.")
-
-    headrefdata = coildatastructure["headrefdata"]["data"]
-    coilrefdata = coildatastructure["coilrefdata"]["data"]
-    point = coildatastructure["coilstimpointrefdata"]["data"]
-    headpoint = coildatastructure["headstimpointrefdata"]
-
-    coildisplacement = dict()
-    coildisplacement["headmarkernames"] = coildatastructure["headrefdata"]["names"]
-    coildisplacement["coilmarkernames"] = coildatastructure["coilrefdata"]["names"]
-    headindex = marker_indices(markernames, coildatastructure["headrefdata"]["names"])
-    coilindex = marker_indices(markernames, coildatastructure["coilrefdata"]["names"])
-    coildisplacement["headexpdata"] = marker_frame[:, headindex][np.newaxis, :, :]
-    coildisplacement["coilexpdata"] = marker_frame[:, coilindex][np.newaxis, :, :]
-
-    coildisplacement['coilR'], coildisplacement["coilstimpoint"], _, _ = rigidbodytransform(
-        coilrefdata, coildisplacement["coilexpdata"], point)
-    coildisplacement['headR'], coildisplacement["headstimpoint"], _, _ = rigidbodytransform(
-        headrefdata, coildisplacement["headexpdata"], headpoint)
+    coildisplacement = _compute_coil_displacement_from_marker_data(
+        marker_frame[np.newaxis, :, :], markernames, coildatastructure, "stream")
 
     return coildisplacement, coildatastructure
 

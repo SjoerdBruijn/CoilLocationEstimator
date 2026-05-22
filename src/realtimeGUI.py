@@ -378,14 +378,11 @@ class RealtimeGUI:
             self.set_status("No LSL frame received to start live view.")
             return
 
-        markers = self._sample_to_marker_frame(sample)
         try:
-            outdata, self.coildatastructure = clf.get_coil_displacement_from_frame(
-                markers, self.stream_markernames, self.coildatastructure)
+            outdata = self._process_lsl_sample(sample)
         except ValueError as exc:
             self.set_status(str(exc))
             return
-        self.headstimpoint = outdata.get("headstimpoint")
 
         if self.animation_app is None:
             self.animation_app = AnimationApp(
@@ -484,15 +481,12 @@ class RealtimeGUI:
             if sample is None:
                 break
             processed_sample = True
-            markers = self._sample_to_marker_frame(sample)
             try:
-                outdata, self.coildatastructure = clf.get_coil_displacement_from_frame(
-                    markers, self.stream_markernames, self.coildatastructure)
+                outdata = self._process_lsl_sample(sample)
             except ValueError as exc:
                 self.stop_tracking()
                 self.set_status(str(exc))
                 return
-            self.headstimpoint = outdata.get("headstimpoint")
             outdata_batch.append(outdata)
 
         if processed_sample and self.animation_app is not None:
@@ -500,6 +494,31 @@ class RealtimeGUI:
             self.set_status("Receiving live LSL data.")
         if self.tracking_active:
             self._schedule_poll()
+
+    def _process_lsl_sample(self, sample):
+        """Convert one LSL sample into displacement output data.
+
+        Parameters
+        ----------
+        sample : sequence of float
+            Flat LSL channel data containing marker coordinates.
+
+        Returns
+        -------
+        dict
+            Single-frame coil displacement dictionary returned by
+            ``clf.get_coil_displacement_from_frame``.
+
+        Raises
+        ------
+        ValueError
+            Propagated when sample shape or required marker data are invalid.
+        """
+        markers = self._sample_to_marker_frame(sample)
+        outdata, self.coildatastructure = clf.get_coil_displacement_from_frame(
+            markers, self.stream_markernames, self.coildatastructure)
+        self.headstimpoint = outdata.get("headstimpoint")
+        return outdata
 
     def _sample_to_marker_frame(self, sample):
         """Convert one flat LSL sample into a ``3 x n_markers`` array.
