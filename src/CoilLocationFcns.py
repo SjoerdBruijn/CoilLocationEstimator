@@ -7,6 +7,7 @@ Created on Mon Oct 14 14:37:40 2024
 """
 from ezc3d import c3d
 from MarkerSelectionGui import MarkerSelector
+import json
 import numpy as np
 
 def select_markers(filename, coilmarkernames=[], headmarkernames=[], stimpointmarkername=[]):
@@ -126,7 +127,7 @@ def create_coil_data(filename, coilmarkernames=None, headmarkernames=None, stimp
     coildatastructure = {
         "coilrefdata": {"names": coilmarkernames},
         "headrefdata": {"names": headmarkernames},
-        "stimpointrefdata": {"names": stimpointmarkername}
+        "coilstimpointrefdata": {"names": stimpointmarkername}
     }
 
     # Add and update the 'data' key in each inner dictionary
@@ -157,7 +158,7 @@ def create_coil_data_from_frame(markers, markernames, coilmarkernames=None, head
     coildatastructure = {
         "coilrefdata": {"names": coilmarkernames},
         "headrefdata": {"names": headmarkernames},
-        "stimpointrefdata": {"names": stimpointmarkername}
+        "coilstimpointrefdata": {"names": stimpointmarkername}
     }
     marker_frame = np.asarray(markers)
     if marker_frame.shape[0] != 3:
@@ -167,6 +168,232 @@ def create_coil_data_from_frame(markers, markernames, coilmarkernames=None, head
         index = marker_indices(markernames, coildatastructure[key]["names"])
         coildatastructure[key]["data"] = marker_frame[:, index].T
     return coildatastructure
+
+
+def create_headrefdata(filename, coildatastructure, sample_number=None):
+    """
+    Adds experiment-specific head reference data to an existing coil data structure.
+
+    Parameters:
+        filename (str): Path to the experimental C3D file.
+        coildatastructure (dict): Coil data structure created by create_coil_data.
+        sample_number (int or None): Zero-based sample to use as head reference.
+            If None, uses the first sample where all required markers are visible.
+
+    Returns:
+        dict: The updated coil data structure.
+    """
+
+    if coildatastructure["headrefdata"]["names"] == []:
+        _, coildatastructure["headrefdata"]["names"], _ = select_markers(
+            filename,
+            coildatastructure["coilrefdata"]["names"],
+            coildatastructure["headrefdata"]["names"],
+            coildatastructure["coilstimpointrefdata"]["names"])
+
+    required_markernames = (
+        coildatastructure["headrefdata"]["names"] +
+        coildatastructure["coilrefdata"]["names"]
+    )
+    point_data, markernames, firstind = getkindata(filename, required_markernames)
+
+    if sample_number is None:
+        sample_number = firstind
+
+    n_samples = point_data.shape[2]
+    if sample_number < 0 or sample_number >= n_samples:
+        raise IndexError(
+            f"sample_number {sample_number} is outside the available range 0-{n_samples - 1}.")
+
+    headindex = marker_indices(markernames, coildatastructure["headrefdata"]["names"])
+    coilindex = marker_indices(markernames, coildatastructure["coilrefdata"]["names"])
+
+    if len(headindex) != len(coildatastructure["headrefdata"]["names"]):
+        raise ValueError("Not all head markers were found in the experimental data.")
+    if len(coilindex) != len(coildatastructure["coilrefdata"]["names"]):
+        raise ValueError("Not all coil markers were found in the experimental data.")
+
+    coildatastructure["headrefdata"]["data"] = extract_marker_data(
+        point_data, sample_number, headindex)
+
+    experimental_headdata = point_data.transpose(2, 0, 1)[:, 0:3, headindex]
+    experimental_coildata = point_data.transpose(2, 0, 1)[:, 0:3, coilindex]
+
+    _, coilstimpoint_at_reference, _, _ = rigidbodytransform(
+        coildatastructure["coilrefdata"]["data"],
+        experimental_coildata[sample_number:sample_number + 1],
+        coildatastructure["coilstimpointrefdata"]["data"])
+
+    coildatastructure["headstimpointrefdata"] = coilstimpoint_at_reference
+    
+
+    return coildatastructure
+
+
+def create_headrefdata_from_frame(markers, markernames, coildatastructure, master=None):
+    """
+    Adds head reference data to an existing coil data structure from one marker frame.
+    """
+    marker_frame = np.asarray(markers)
+    if marker_frame.shape[0] != 3:
+        raise ValueError("Expected markers with shape 3 x n_markers.")
+
+    if coildatastructure["headrefdata"]["names"] == []:
+        _, coildatastructure["headrefdata"]["names"], _ = select_markers_from_frame(
+            marker_frame,
+            markernames,
+            coildatastructure["coilrefdata"]["names"],
+            coildatastructure["headrefdata"]["names"],
+            coildatastructure["coilstimpointrefdata"]["names"],
+            master=master)
+
+    headindex = marker_indices(markernames, coildatastructure["headrefdata"]["names"])
+    coilindex = marker_indices(markernames, coildatastructure["coilrefdata"]["names"])
+
+    if len(headindex) != len(coildatastructure["headrefdata"]["names"]):
+        raise ValueError("Not all head markers were found in the marker frame.")
+    if len(coilindex) != len(coildatastructure["coilrefdata"]["names"]):
+        raise ValueError("Not all coil markers were found in the marker frame.")
+
+    coildatastructure["headrefdata"]["data"] = marker_frame[:, headindex].T
+    coil_exp_data = marker_frame[:, coilindex][np.newaxis, :, :]
+
+    _, coildatastructure["headstimpointrefdata"], _, _ = rigidbodytransform(
+        coildatastructure["coilrefdata"]["data"],
+        coil_exp_data,
+        coildatastructure["coilstimpointrefdata"]["data"])
+
+    return coildatastructure
+
+
+def _empty_marker_array():
+    return np.empty((0, 3))
+
+
+def sanitize_coildatastructure_for_save(coildatastructure):
+    """
+    Creates a serializable copy of the coil data structure while excluding
+    live head-reference data and any head stimulation point data.
+    """
+    sanitized = {}
+    for key in ["coilrefdata", "headrefdata", "coilstimpointrefdata"]:
+        entry = coildatastructure.get(key, {})
+        names = list(entry.get("names", []))
+        data = np.asarray(entry.get("data", _empty_marker_array()), dtype=float)
+
+        if key == "headrefdata":
+            data = _empty_marker_array()
+
+        sanitized[key] = {
+            "names": names,
+            "data": data.tolist()
+        }
+
+    sanitized.pop("headstimpoint", None)
+    sanitized.pop("headstimpointrefdata", None)
+    return sanitized
+
+
+def _normalize_loaded_coildatastructure(raw_structure):
+    normalized = {}
+    for key in ["coilrefdata", "headrefdata", "coilstimpointrefdata"]:
+        source_key = "stimpointrefdata" if key == "coilstimpointrefdata" else key
+        entry = raw_structure.get(key, raw_structure.get(source_key, {}))
+        names = list(entry.get("names", []))
+        data = np.asarray(entry.get("data", []), dtype=float)
+
+        if data.size == 0:
+            data = _empty_marker_array()
+        elif data.ndim == 1:
+            data = data.reshape(1, -1)
+
+        if key == "headrefdata":
+            data = _empty_marker_array()
+
+        normalized[key] = {
+            "names": names,
+            "data": data
+        }
+    return normalized
+
+
+def save_coildatastructure(coildatastructure, filename):
+    """
+    Saves the coil data structure to JSON, excluding head reference data and
+    any head stimulation point data.
+    """
+    serializable = sanitize_coildatastructure_for_save(coildatastructure)
+    with open(filename, "w", encoding="utf-8") as file:
+        json.dump(serializable, file, indent=2)
+
+
+def load_coildatastructure(filename):
+    """
+    Loads a coil data structure from JSON and restores numpy arrays.
+    """
+    with open(filename, "r", encoding="utf-8") as file:
+        raw_structure = json.load(file)
+    return _normalize_loaded_coildatastructure(raw_structure)
+
+
+def sanitize_headrefdata_for_save(coildatastructure):
+    """
+    Creates a serializable copy of the coil data structure including
+    head reference data and optional head stimulation point data.
+    """
+    sanitized = {}
+    for key in ["coilrefdata", "headrefdata", "coilstimpointrefdata"]:
+        entry = coildatastructure.get(key, {})
+        names = list(entry.get("names", []))
+        data = np.asarray(entry.get("data", _empty_marker_array()), dtype=float)
+        sanitized[key] = {
+            "names": names,
+            "data": data.tolist()
+        }
+
+    headstimpointrefdata = coildatastructure.get("headstimpointrefdata")
+    if headstimpointrefdata is not None:
+        sanitized["headstimpointrefdata"] = np.asarray(
+            headstimpointrefdata, dtype=float).tolist()
+
+    return sanitized
+
+
+def save_headrefdata(coildatastructure, filename):
+    """
+    Saves coil reference data together with head reference data and optional
+    head stimulation point data.
+    """
+    serializable = sanitize_headrefdata_for_save(coildatastructure)
+    with open(filename, "w", encoding="utf-8") as file:
+        json.dump(serializable, file, indent=2)
+
+
+def load_headrefdata(filename):
+    """
+    Loads coil reference data together with head reference data and optional
+    head stimulation point data.
+    """
+    with open(filename, "r", encoding="utf-8") as file:
+        raw_structure = json.load(file)
+
+    normalized = _normalize_loaded_coildatastructure(raw_structure)
+    normalized["headrefdata"]["data"] = np.asarray(
+        raw_structure.get("headrefdata", {}).get("data", []),
+        dtype=float
+    )
+    if normalized["headrefdata"]["data"].size == 0:
+        normalized["headrefdata"]["data"] = _empty_marker_array()
+    elif normalized["headrefdata"]["data"].ndim == 1:
+        normalized["headrefdata"]["data"] = normalized["headrefdata"]["data"].reshape(1, -1)
+
+    if "headstimpointrefdata" in raw_structure:
+        normalized["headstimpointrefdata"] = np.asarray(
+            raw_structure["headstimpointrefdata"],
+            dtype=float
+        )
+
+    return normalized
 
 
 def get_coil_displacement(expfilename, coildatastructure):
@@ -182,38 +409,33 @@ def get_coil_displacement(expfilename, coildatastructure):
             coildisplacement (dict): Displacement data for head and coil markers, and calculated stimulation points.
             coildatastructure (dict): Updated coil data structure.
     """
-    
-    if coildatastructure["headrefdata"]["names"]==[]: #TODO
-        _, coildatastructure["headrefdata"]["names"], _ = select_markers(expfilename, coildatastructure["coilrefdata"]["names"],coildatastructure["headrefdata"]["names"],coildatastructure["stimpointrefdata"]["names"])
+    if (coildatastructure["headrefdata"]['data'].size == 0 or
+            "headstimpointrefdata" not in coildatastructure):
+        coildatastructure = create_headrefdata(expfilename, coildatastructure)
 
-        
     allmarkernames = coildatastructure["headrefdata"]["names"] + \
-        coildatastructure["coilrefdata"]["names"] + \
-        coildatastructure["stimpointrefdata"]["names"]
-    point_data, markernames, firstind = getkindata(expfilename, allmarkernames)
+        coildatastructure["coilrefdata"]["names"]
+    point_data, markernames, _ = getkindata(expfilename, allmarkernames)
 
-    # TODO; this is probably empty, in which case use first sample all visible! see also line ??
-    if coildatastructure["headrefdata"]['data'].size == 0:
-        # TODO, or when using current as ref..
-        index = marker_indices(markernames, coildatastructure["headrefdata"]["names"])
-        coildatastructure["headrefdata"]["data"] = extract_marker_data(point_data, firstind, index)
-    else:
-        print('using previously calculated head data as reference')
     headrefdata = coildatastructure["headrefdata"]["data"]
     coilrefdata = coildatastructure["coilrefdata"]["data"]
-    point = coildatastructure["stimpointrefdata"]["data"]
+    coilpoint = coildatastructure["coilstimpointrefdata"]["data"]
+    headpoint = coildatastructure["headstimpointrefdata"]
 
     # get exp data
     coildisplacement = dict()
-    for key in ["headrefdata", "coilrefdata"]:
-        index = marker_indices(markernames, coildatastructure[key]["names"])
-        coildisplacement[key] = point_data.transpose(2, 0, 1)[:, 0:3, index]
+    coildisplacement["headmarkernames"] = coildatastructure["headrefdata"]["names"]
+    coildisplacement["coilmarkernames"] = coildatastructure["coilrefdata"]["names"]
+    headindex = marker_indices(markernames, coildatastructure["headrefdata"]["names"])
+    coilindex = marker_indices(markernames, coildatastructure["coilrefdata"]["names"])
+    coildisplacement["headexpdata"] = point_data.transpose(2, 0, 1)[:, 0:3, headindex]
+    coildisplacement["coilexpdata"] = point_data.transpose(2, 0, 1)[:, 0:3, coilindex]
 
     # calculate stim point during exp
     coildisplacement['coilR'], coildisplacement["coilstimpoint"],_ ,_= rigidbodytransform(
-        coilrefdata, coildisplacement["coilrefdata"], point)
-    coildisplacement['headR'], coildisplacement["headstimpoint"],_,_ = rigidbodytransform(
-        headrefdata, coildisplacement["headrefdata"], coildisplacement["coilstimpoint"][firstind])
+        coilrefdata, coildisplacement["coilexpdata"], coilpoint)
+    coildisplacement['headR'], coildisplacement["headstimpoint"], _, _ = rigidbodytransform(
+        headrefdata, coildisplacement["headexpdata"], headpoint)
 
     return coildisplacement, coildatastructure
 
@@ -241,17 +463,21 @@ def get_coil_displacement_from_frame(markers, markernames, coildatastructure):
 
     headrefdata = coildatastructure["headrefdata"]["data"]
     coilrefdata = coildatastructure["coilrefdata"]["data"]
-    point = coildatastructure["stimpointrefdata"]["data"]
+    point = coildatastructure["coilstimpointrefdata"]["data"]
 
     coildisplacement = dict()
-    for key in ["headrefdata", "coilrefdata"]:
-        index = marker_indices(markernames, coildatastructure[key]["names"])
-        coildisplacement[key] = marker_frame[:, index][np.newaxis, :, :]
+    coildisplacement["headmarkernames"] = coildatastructure["headrefdata"]["names"]
+    coildisplacement["coilmarkernames"] = coildatastructure["coilrefdata"]["names"]
+    headindex = marker_indices(markernames, coildatastructure["headrefdata"]["names"])
+    coilindex = marker_indices(markernames, coildatastructure["coilrefdata"]["names"])
+    coildisplacement["headexpdata"] = marker_frame[:, headindex][np.newaxis, :, :]
+    coildisplacement["coilexpdata"] = marker_frame[:, coilindex][np.newaxis, :, :]
 
     coildisplacement['coilR'], coildisplacement["coilstimpoint"], _, _ = rigidbodytransform(
-        coilrefdata, coildisplacement["coilrefdata"], point)
+        coilrefdata, coildisplacement["coilexpdata"], point)
+    headpoint = coildatastructure.get("headstimpointrefdata", coildisplacement["coilstimpoint"][0])
     coildisplacement['headR'], coildisplacement["headstimpoint"], _, _ = rigidbodytransform(
-        headrefdata, coildisplacement["headrefdata"], coildisplacement["coilstimpoint"][0])
+        headrefdata, coildisplacement["headexpdata"], headpoint)
 
     return coildisplacement, coildatastructure
 

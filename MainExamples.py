@@ -36,11 +36,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 from ezc3d import c3d
 import CoilLocationFcns as clf
 from CoilLocationGUI import EstimatorGUI
-from CoilLocationAnimationApp import AnimationApp
+from AnimationBackend import AnimationApp 
 
 # Reference C3D file and marker names
 reffilename = "Jen Cal 05.c3d"
-coilmarkernames = ['LHELM', 'RHELM', 'REARHELM1', 'REARHELM2', 'REARHELM3', 'REARHELM4']
+coilmarkernames = ['LHELM', 'RHELM', 'REARHELM1']
 stimpointmarkername = ['*6']
 headmarkernames = ["LHEAD", "RHEAD", "NASION"]
 
@@ -51,6 +51,8 @@ coildatastructure = clf.create_coil_data(
 # Experimental C3D file
 expfilename = "Jen Cal 08.c3d"
 
+# Add experiment-specific head reference data
+coildatastructure = clf.create_headrefdata(expfilename, coildatastructure)
 # Compute coil displacement using experimental file
 coildisplacement, coildatastructure = clf.get_coil_displacement(
     expfilename, coildatastructure)
@@ -59,4 +61,4 @@ coildisplacement, coildatastructure = clf.get_coil_displacement(
 AnimationApp(coildisplacement)
 
 # Optionally launch the GUI (uncomment to use)
-# EstimatorGUI()
+EstimatorGUI()
