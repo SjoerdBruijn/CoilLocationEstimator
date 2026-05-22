@@ -38,6 +38,27 @@ class AnimationApp:
 
     def __init__(self, coildatastruct, master=None, auto_mainloop=True,
                  live_mode=False, on_close_callback=None):
+        """
+        Build a Qt window with Matplotlib time-series and PyVista 3D panels.
+
+        Args:
+            coildatastruct (dict): Displacement dictionary containing
+                ``headexpdata``, ``coilexpdata``, ``headstimpoint``, and
+                ``coilstimpoint`` arrays plus optional marker names.
+            master (tk.Widget | None): Optional Tk parent. When supplied, Qt
+                events are pumped from Tk so this backend can run inside the
+                existing GUI.
+            auto_mainloop (bool): Whether to start the Qt event loop when this
+                app owns it.
+            live_mode (bool): Whether appended frames should be treated as a
+                rolling live history.
+            on_close_callback (callable | None): Callback invoked when the Qt
+                plot window closes.
+
+        Returns:
+            None: Initializes Qt widgets, copies input arrays, and builds the
+            PyVista actors used for later updates.
+        """
         if _IMPORT_ERROR is not None:
             raise ImportError(
                 "PyVistaAnimationApp requires pyvista, pyvistaqt, and a Qt binding "
@@ -171,12 +192,28 @@ class AnimationApp:
             self.app.exec_()
 
     def _remove_actor(self, name):
+        """
+        Remove a named PyVista actor if it exists.
+
+        Args:
+            name (str): Actor name registered with the PyVista plotter.
+
+        Returns:
+            None: Mutates the PyVista scene only when the actor is present.
+        """
         try:
             self.plotter.remove_actor(name, render=False)
         except (KeyError, ValueError, TypeError):
             pass
 
     def _scene_bounds(self):
+        """
+        Compute padded scene bounds from all marker and stimpoint arrays.
+
+        Returns:
+            tuple: Bounds in PyVista order ``(xmin, xmax, ymin, ymax, zmin,
+            zmax)``. NaN marker positions are ignored.
+        """
         points = np.vstack([
             self.head.transpose(0, 2, 1).reshape(-1, 3),
             self.coil.transpose(0, 2, 1).reshape(-1, 3),
@@ -200,6 +237,12 @@ class AnimationApp:
         )
 
     def _update_bounds_box(self):
+        """
+        Draw or refresh the outer 3D bounds box and labeled grid.
+
+        Returns:
+            None: Mutates the PyVista plotter's bounds/grid actor.
+        """
         self.plotter.show_bounds(
             bounds=self._scene_bounds(),
             grid="back",
@@ -213,10 +256,23 @@ class AnimationApp:
         )
 
     def _start_qt_event_pump(self):
+        """
+        Start processing Qt events from a parent Tk loop when embedded.
+
+        Returns:
+            None: Schedules periodic event processing through ``master.after``.
+        """
         if self.master is not None and hasattr(self.master, "after"):
             self._pump_qt_events()
 
     def _pump_qt_events(self):
+        """
+        Process pending Qt events once and reschedule the pump.
+
+        Returns:
+            None: Keeps the PyVista/Qt window responsive while Tk owns the main
+            loop.
+        """
         if self.closed:
             self.qt_event_pump_job = None
             return
@@ -226,6 +282,12 @@ class AnimationApp:
         self.qt_event_pump_job = self.master.after(10, self._pump_qt_events)
 
     def _stop_qt_event_pump(self):
+        """
+        Cancel the Tk-driven Qt event pump.
+
+        Returns:
+            None: Clears the stored Tk ``after`` job if one exists.
+        """
         if self.qt_event_pump_job is not None and self.master is not None:
             try:
                 self.master.after_cancel(self.qt_event_pump_job)
@@ -234,11 +296,29 @@ class AnimationApp:
             self.qt_event_pump_job = None
 
     def _frame_points(self, data, frame=None):
+        """
+        Convert a stored 3 x n marker frame into PyVista n x 3 points.
+
+        Args:
+            data (np.ndarray): Array with shape n_frames x 3 x n_points.
+            frame (int | None): Frame index to extract. Defaults to
+                ``current_frame``.
+
+        Returns:
+            np.ndarray: Point coordinates with shape n_points x 3.
+        """
         if frame is None:
             frame = self.current_frame
         return np.asarray(data[frame, :, :]).T
 
     def _build_qt_controls(self):
+        """
+        Build the Qt toolbar used to control animation and label display.
+
+        Returns:
+            None: Adds Play/Pause actions, distance label, marker-name checkbox,
+            and frame slider to the main window.
+        """
         toolbar = QtWidgets.QToolBar("Animation")
         play_action = toolbar.addAction("Play")
         play_action.triggered.connect(self.play)
@@ -266,9 +346,26 @@ class AnimationApp:
         self.window.addToolBar(toolbar)
 
     def _install_close_handler(self):
+        """
+        Install a close handler that mirrors the Matplotlib backend behavior.
+
+        Returns:
+            None: Wraps the Qt window close event to pause playback and invoke
+            the optional close callback.
+        """
         original_close_event = self.window.closeEvent
 
         def close_event(event):
+            """
+            Handle Qt close events for the PyVista window.
+
+            Args:
+                event (QCloseEvent): Qt close event object passed by the window.
+
+            Returns:
+                None: Stops playback, stops the Qt event pump, and forwards the
+                event to the original close handler.
+            """
             if not self.closed:
                 self.closed = True
                 self.pause()
@@ -280,6 +377,13 @@ class AnimationApp:
         self.window.closeEvent = close_event
 
     def _add_links(self):
+        """
+        Draw the line connecting head and coil stimulation points.
+
+        Returns:
+            None: Replaces the previous link actor with one for the current
+            frame.
+        """
         self._remove_actor("stimpoint_link")
         points = np.vstack([
             self._frame_points(self.headstimpoint),
@@ -290,18 +394,47 @@ class AnimationApp:
             self.plotter.add_mesh(line, color="black", line_width=2, name="stimpoint_link")
 
     def _compute_euclidean_distance(self, frame):
+        """
+        Compute scalar distance between head and coil stimulation points.
+
+        Args:
+            frame (int): Frame index to evaluate.
+
+        Returns:
+            float: Euclidean norm of the stimpoint displacement at ``frame``.
+        """
         displacement = self.coilstimpoint[frame, :, 0] - self.headstimpoint[frame, :, 0]
         return np.linalg.norm(displacement)
 
     def _compute_dist(self):
+        """
+        Compute component-wise stimpoint displacement for the time-series plot.
+
+        Returns:
+            np.ndarray: Array with shape n_frames x 3 containing
+            ``coilstimpoint - headstimpoint``.
+        """
         return self.coilstimpoint[:, :, 0] - self.headstimpoint[:, :, 0]
 
     def _update_distance_label(self):
+        """
+        Update the Qt label showing the current Euclidean distance.
+
+        Returns:
+            None: Mutates ``distance_label`` text.
+        """
         text = f"eucledian distance: {self._compute_euclidean_distance(self.current_frame):.2f} mm"
         if self.distance_label is not None:
             self.distance_label.setText(text)
 
     def _refresh_timeseries(self):
+        """
+        Refresh Matplotlib time-series lines after live frames are appended.
+
+        Returns:
+            None: Recomputes displacement arrays, updates line data, and
+            rescales the left subplot.
+        """
         self.dist = self._compute_dist()
         x = np.arange(self.dist.shape[0])
         for index, line in enumerate(self.line):
@@ -310,6 +443,13 @@ class AnimationApp:
         self.ax1.autoscale_view()
 
     def _marker_label_points_and_names(self):
+        """
+        Collect current marker label coordinates and names.
+
+        Returns:
+            tuple: ``(points, labels)`` where points is n_labels x 3 and labels
+            is the corresponding list of marker names.
+        """
         head_names = self.headmarkernames[:self.head.shape[2]]
         coil_names = self.coilmarkernames[:self.coil.shape[2]]
         points = []
@@ -327,6 +467,15 @@ class AnimationApp:
         return np.vstack(points), labels
 
     def _toggle_marker_names(self, *args):
+        """
+        Toggle marker labels in the PyVista scene.
+
+        Args:
+            *args: Qt signal arguments, ignored.
+
+        Returns:
+            None: Updates label visibility and redraws the PyVista panel.
+        """
         if self.marker_names_checkbox is not None:
             self.show_marker_names = self.marker_names_checkbox.isChecked()
         else:
@@ -335,6 +484,12 @@ class AnimationApp:
         self.plotter.render()
 
     def _update_marker_labels(self):
+        """
+        Refresh marker label actors for the current frame.
+
+        Returns:
+            None: Replaces the marker-label actor when labels are enabled.
+        """
         self._remove_actor("marker_labels")
         if not self.show_marker_names:
             return
@@ -354,16 +509,35 @@ class AnimationApp:
         )
 
     def play(self):
+        """
+        Start advancing frames with the Qt timer.
+
+        Returns:
+            None: Updates pause state and starts the timer.
+        """
         if not self.is_paused:
             return
         self.is_paused = False
         self.timer.start(self.frame_interval_ms)
 
     def pause(self):
+        """
+        Stop frame advancement.
+
+        Returns:
+            None: Updates pause state and stops the Qt timer.
+        """
         self.is_paused = True
         self.timer.stop()
 
     def _tick(self):
+        """
+        Advance the PyVista/Matplotlib plot by one frame.
+
+        Returns:
+            None: Updates both panels and increments ``current_frame`` while
+            playback remains active.
+        """
         if self.is_paused:
             return
         self.update_plot(self.current_frame)
@@ -371,6 +545,15 @@ class AnimationApp:
             self.current_frame += 1
 
     def slider_update(self, value):
+        """
+        Handle manual Qt slider movement.
+
+        Args:
+            value (int): Frame index from the slider.
+
+        Returns:
+            None: Updates the displayed frame and distance label.
+        """
         if self.slider_moving:
             return
         self.slider_moving = True
@@ -378,6 +561,18 @@ class AnimationApp:
         self.slider_moving = False
 
     def update_plot(self, frame, force_distance_update=False):
+        """
+        Update the time-series cursor and 3D actors to a specific frame.
+
+        Args:
+            frame (int): Frame index to display.
+            force_distance_update (bool): Whether to update the distance label
+                even when update throttling would normally skip it.
+
+        Returns:
+            None: Mutates PyVista actor points, marker labels, slider state, and
+            the Matplotlib cursor line.
+        """
         if self.num_frames == 0 or self.closed:
             return
 
@@ -420,9 +615,29 @@ class AnimationApp:
         self.canvas.draw_idle()
 
     def append_frame(self, coildatastruct):
+        """
+        Append one live displacement frame.
+
+        Args:
+            coildatastruct (dict): Single-frame displacement dictionary.
+
+        Returns:
+            None: Delegates to ``append_frames``.
+        """
         self.append_frames([coildatastruct])
 
     def append_frames(self, coildatastructs):
+        """
+        Append multiple live displacement frames and redraw once.
+
+        Args:
+            coildatastructs (list[dict]): Sequence of single-frame displacement
+                dictionaries.
+
+        Returns:
+            None: Concatenates frame arrays, trims rolling live history, updates
+            plot bounds and time-series data, and displays the newest frame.
+        """
         if len(coildatastructs) == 0 or self.closed:
             return
 
@@ -458,6 +673,13 @@ class AnimationApp:
         self.update_plot(self.current_frame, force_distance_update=True)
 
     def on_close(self):
+        """
+        Close the PyVista/Qt animation window.
+
+        Returns:
+            None: Stops playback, cancels the Tk event pump, invokes the close
+            callback, and closes the Qt window.
+        """
         if self.closed:
             return
         self.closed = True

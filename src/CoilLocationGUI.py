@@ -9,10 +9,29 @@ Created on Fri Aug 23 14:42:23 2024
 from AnimationBackend import AnimationApp
 import CoilLocationFcns as clf
 import tkinter as tk
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 
 class EstimatorGUI:
+    """Tkinter GUI for offline coil-location estimation from C3D files.
+
+    The GUI stores selected file paths, builds or loads the coil/head reference
+    data dictionaries, computes coil displacement for an experimental file, and
+    launches an animation viewer for the resulting displacement arrays.
+    """
+
     def __init__(self):
+        """Initialize the offline GUI, internal data fields, and Tk widgets.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            The constructor starts the Tkinter main loop and keeps state on the
+            instance while the user selects files and runs computations.
+        """
 
         self.reffilename = None
         self.headreffilename = None
@@ -77,26 +96,95 @@ class EstimatorGUI:
         self.root.mainloop()
         
     def select_file(self, label_widget):
+        """Ask the user for a file path and mirror it into a label widget.
+
+        Parameters
+        ----------
+        label_widget : tkinter.Label
+            Label whose text is replaced with the selected file path.
+
+        Returns
+        -------
+        str or None
+            The selected filename, or ``None`` when the dialog is cancelled.
+        """
         filename = filedialog.askopenfilename()
         if filename:
             label_widget.config(text=filename)
         return filename
 
     def select_ref_file(self):
+        """Select the coil reference C3D file and store its path.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Updates ``self.reffilename`` and the coil reference file label.
+        """
         self.reffilename = self.select_file(self.file1_label)
 
     def select_exp_file(self):
+        """Select the experimental C3D file and store its path.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Updates ``self.expfilename`` and the experimental file label.
+        """
         self.expfilename = self.select_file(self.file2_label)
 
     def select_headref_file(self):
+        """Select the head reference C3D file and store its path.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Updates ``self.headreffilename`` and the head reference file label.
+        """
         self.headreffilename = self.select_file(self.headref_file_label)
             
     def create_coildatastructure(self):
+        """Create the coil data dictionary from the selected reference file.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Updates ``self.coildatastructure`` with marker selections, coil
+            reference data, and coil stimulation point reference data.
+        """
         if self.reffilename == None:
             self.select_ref_file()
         self.coildatastructure = clf.create_coil_data(self.reffilename)
 
     def load_coildatastructure(self):
+        """Load a saved coil data dictionary from JSON.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Replaces ``self.coildatastructure`` with the loaded dictionary and
+            clears cached head stimulation point state.
+        """
         filename = filedialog.askopenfilename(
             title="Load coil data structure",
             filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
@@ -107,6 +195,18 @@ class EstimatorGUI:
         self.headstimpoint = None
 
     def save_coildatastructure(self):
+        """Save the current coil data dictionary to JSON.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Writes a sanitized copy of ``self.coildatastructure`` when data and
+            an output path are available.
+        """
         if self.coildatastructure is None:
             return
         filename = filedialog.asksaveasfilename(
@@ -119,6 +219,18 @@ class EstimatorGUI:
         clf.save_coildatastructure(self.coildatastructure, filename)
 
     def load_headrefdata(self):
+        """Load a saved head reference dictionary from JSON.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Replaces ``self.coildatastructure`` with the loaded reference data
+            and clears cached head stimulation point state.
+        """
         filename = filedialog.askopenfilename(
             title="Load head reference data",
             filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
@@ -129,6 +241,18 @@ class EstimatorGUI:
         self.headstimpoint = None
 
     def save_headrefdata(self):
+        """Save head reference fields from the current data dictionary.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Writes head marker reference data and head stimulation point
+            reference data to JSON when available.
+        """
         if self.coildatastructure is None:
             return
         filename = filedialog.asksaveasfilename(
@@ -141,6 +265,18 @@ class EstimatorGUI:
         clf.save_headrefdata(self.coildatastructure, filename)
 
     def reference_head_markers(self):
+        """Create head reference data from the selected head reference file.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Ensures coil data exists, then updates ``self.coildatastructure``
+            with ``headrefdata`` and ``headstimpointrefdata``.
+        """
         if self.coildatastructure is None:
             if self.reffilename == None:
                 self.select_ref_file()
@@ -155,11 +291,31 @@ class EstimatorGUI:
         self.headstimpoint = None
 
     def calculate_coil_displacement(self):
+        """Compute displacement data for the selected experimental file.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Updates ``self.outdata`` and ``self.coildatastructure``, stores the
+            current head stimulation point array, launches the animation app,
+            and optionally saves results.
+        """
         if self.reffilename == None:
             self.select_ref_file()
         if self.expfilename == None:
             self.select_exp_file()
-        self.outdata,self.coildatastructure = clf.get_coil_displacement(self.expfilename, self.coildatastructure)
+        if self.coildatastructure is None:
+            messagebox.showerror("Cannot show data", "Create or load the coil data structure first.")
+            return
+        try:
+            self.outdata,self.coildatastructure = clf.get_coil_displacement(self.expfilename, self.coildatastructure)
+        except ValueError as exc:
+            messagebox.showerror("Cannot show data", str(exc))
+            return
         self.headstimpoint = self.outdata.get("headstimpoint")
         self.animation_app = AnimationApp(self.outdata, master=self.root, auto_mainloop=False)
         if self.save_results_var.get():

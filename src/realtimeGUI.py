@@ -13,10 +13,26 @@ except ImportError:  # pragma: no cover - depends on local environment
     StreamInlet = None
     resolve_streams = None
 
-# todo; proper behaviour when head tracking window is closed while tracking is active (currently just stops tracking and shows error in status)
-# todo; logic of stimpoint for ref in head an coil coordinates does not seem correct yet
 class RealtimeGUI:
+    """Tkinter GUI for live coil-location tracking from an LSL marker stream.
+
+    The GUI manages coil/head reference data, connects to a compatible LSL
+    marker stream, converts incoming samples into marker frames, computes live
+    displacement dictionaries, and feeds those frames into the animation app.
+    """
+
     def __init__(self):
+        """Initialize live-tracking state, Tk widgets, and the event loop.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Stores GUI state on the instance and starts the Tkinter main loop.
+        """
         self.reffilename = None
         self.headreffilename = None
         self.coildatastructure = None
@@ -78,9 +94,33 @@ class RealtimeGUI:
         self.root.mainloop()
 
     def set_status(self, message):
+        """Display a status message in the realtime GUI.
+
+        Parameters
+        ----------
+        message : str
+            Text describing the latest file, LSL, or tracking state.
+
+        Returns
+        -------
+        None.
+            Updates only the status label text.
+        """
         self.status_label.config(text=message)
 
     def select_ref_file(self):
+        """Select the coil reference C3D file used to build coil data.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Updates ``self.reffilename``, the reference label, and the status
+            label when a file is selected.
+        """
         filename = filedialog.askopenfilename()
         if filename:
             self.reffilename = filename
@@ -88,6 +128,18 @@ class RealtimeGUI:
             self.set_status("Reference file selected.")
 
     def select_headref_file(self):
+        """Select the head reference C3D file used for reference data.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Updates ``self.headreffilename``, the head reference label, and the
+            status label when a file is selected.
+        """
         filename = filedialog.askopenfilename()
         if filename:
             self.headreffilename = filename
@@ -95,6 +147,19 @@ class RealtimeGUI:
             self.set_status("Head reference file selected.")
 
     def create_coildatastructure(self):
+        """Create coil reference data from the selected coil reference file.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Updates ``self.coildatastructure`` with coil marker and stimulation
+            reference data, clears cached head stimulation point state, and
+            reports success or cancellation in the status label.
+        """
         if self.reffilename is None:
             self.select_ref_file()
         if self.reffilename is None:
@@ -105,6 +170,18 @@ class RealtimeGUI:
         self.set_status("Coil data structure created from the reference file.")
 
     def load_coildatastructure(self):
+        """Load saved coil reference data from JSON.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Replaces ``self.coildatastructure`` with loaded coil reference
+            fields and clears cached head stimulation point state.
+        """
         filename = filedialog.askopenfilename(
             title="Load coil data structure",
             filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
@@ -117,6 +194,18 @@ class RealtimeGUI:
         self.set_status("Coil data structure loaded. Head reference data was left empty.")
 
     def save_coildatastructure(self):
+        """Save the current coil reference data to JSON.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Writes a sanitized coil data structure when data and a destination
+            path are available; otherwise only updates GUI status.
+        """
         if self.coildatastructure is None:
             self.set_status("Create or load the coil data structure first.")
             return
@@ -132,6 +221,18 @@ class RealtimeGUI:
         self.set_status("Coil data structure saved without head reference data.")
 
     def load_headrefdata(self):
+        """Load saved head reference data from JSON.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Replaces ``self.coildatastructure`` with loaded head reference data
+            and clears cached head stimulation point state.
+        """
         filename = filedialog.askopenfilename(
             title="Load head reference data",
             filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
@@ -144,6 +245,18 @@ class RealtimeGUI:
         self.set_status("Head reference data loaded, including saved head stimulation point data when available.")
 
     def save_headrefdata(self):
+        """Save head reference fields from the current data dictionary.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Writes head reference markers and head stimulation point reference
+            data to JSON when a data structure and destination are available.
+        """
         if self.coildatastructure is None:
             self.set_status("Create or load the coil data structure first.")
             return
@@ -159,6 +272,18 @@ class RealtimeGUI:
         self.set_status("Head reference data saved.")
 
     def connect_to_lsl(self):
+        """Connect to the first compatible live LSL marker stream.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Updates ``self.stream_info``, ``self.inlet``, and
+            ``self.stream_markernames`` when a compatible stream is found.
+        """
         if StreamInlet is None:
             self.set_status("LSL support is unavailable. Install 'pylsl' first.")
             return
@@ -186,6 +311,19 @@ class RealtimeGUI:
         self.set_status(f"Connected to LSL stream '{selected_stream.name()}'.")
 
     def reference_head_markers(self):
+        """Create head reference data from the selected head reference file.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Updates ``self.coildatastructure`` with head marker reference data
+            and head stimulation point reference data, or reports an error in
+            the status label.
+        """
         if self.coildatastructure is None:
             self.set_status("Create the coil data structure first.")
             return
@@ -206,6 +344,19 @@ class RealtimeGUI:
         self.set_status("Head reference data structure created from the head reference file.")
 
     def run_head_tracking(self):
+        """Start live tracking and initialize or resume the animation app.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Pulls an initial LSL sample, converts it to marker coordinates,
+            computes a displacement frame, starts polling, and sends data to
+            the animation app.
+        """
         if self.inlet is None:
             self.set_status("Connect to LSL before starting live view.")
             return
@@ -214,6 +365,9 @@ class RealtimeGUI:
             return
         if self.coildatastructure["headrefdata"]["data"].size == 0:
             self.set_status("Create reference data structure first.")
+            return
+        if "headstimpointrefdata" not in self.coildatastructure:
+            self.set_status("Create or load head stimulation point reference data first.")
             return
         if self.tracking_active:
             self.set_status("Live view is already running.")
@@ -250,6 +404,18 @@ class RealtimeGUI:
         self.set_status("Live view is running.")
 
     def stop_tracking(self):
+        """Stop live tracking and cancel any pending LSL poll callback.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Sets ``self.tracking_active`` false, clears ``self.poll_job``, and
+            updates the status label.
+        """
         self.tracking_active = False
         if self.poll_job is not None:
             self.root.after_cancel(self.poll_job)
@@ -257,15 +423,53 @@ class RealtimeGUI:
         self.set_status("Live view stopped.")
 
     def on_animation_closed(self):
+        """Handle manual closing of the animation window.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Stops live tracking and clears the animation app reference so live
+            view can be restarted later.
+        """
         self.stop_tracking()
         self.animation_app = None
 
     def _schedule_poll(self):
+        """Schedule the next non-blocking LSL polling callback.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Replaces any previous scheduled callback with a new Tk ``after``
+            job stored in ``self.poll_job``.
+        """
         if self.poll_job is not None:
             self.root.after_cancel(self.poll_job)
         self.poll_job = self.root.after(self.poll_interval_ms, self.poll_lsl)
 
     def poll_lsl(self):
+        """Drain available LSL samples and append them to the animation.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Converts every available sample into marker frames, updates the coil
+            data structure through displacement calculations, appends frames to
+            the animation app, and reschedules polling while tracking remains
+            active.
+        """
         if not self.tracking_active or self.inlet is None:
             self.poll_job = None
             return
@@ -298,6 +502,21 @@ class RealtimeGUI:
             self._schedule_poll()
 
     def _sample_to_marker_frame(self, sample):
+        """Convert one flat LSL sample into a ``3 x n_markers`` array.
+
+        Parameters
+        ----------
+        sample : sequence of float
+            Flat LSL channel data containing either XYZ triples or XYZW groups
+            for each marker.
+
+        Returns
+        -------
+        numpy.ndarray
+            Marker coordinate matrix with rows ``X, Y, Z`` and one column per
+            marker. The method may also refresh default marker names when the
+            channel count implies a different marker count.
+        """
         sample_array = np.asarray(sample, dtype=float)
         channel_count = sample_array.size
         n_markers = len(self.stream_markernames)
@@ -322,6 +541,19 @@ class RealtimeGUI:
         raise ValueError("LSL sample size is not compatible with 3D marker coordinates.")
 
     def _extract_marker_names(self, stream_info):
+        """Extract marker names from LSL stream metadata.
+
+        Parameters
+        ----------
+        stream_info : pylsl.StreamInfo
+            Full LSL stream metadata returned by an inlet.
+
+        Returns
+        -------
+        list of str
+            Marker labels from the ``markers`` block, channel metadata, or
+            generated fallback labels inferred from the channel count.
+        """
         n_channels = stream_info.channel_count()
         names = self._extract_marker_names_from_markers(stream_info)
         if len(names) > 0:
@@ -357,6 +589,18 @@ class RealtimeGUI:
         return names
 
     def _extract_marker_names_from_markers(self, stream_info):
+        """Read marker labels from the LSL metadata ``markers`` block.
+
+        Parameters
+        ----------
+        stream_info : pylsl.StreamInfo
+            Full stream metadata that may contain a ``markers`` XML node.
+
+        Returns
+        -------
+        list of str
+            Labels found in marker metadata, or an empty list when unavailable.
+        """
         names = []
         try:
             markers = stream_info.desc().child("markers")
@@ -371,9 +615,33 @@ class RealtimeGUI:
         return names
 
     def _default_marker_names(self, n_markers):
+        """Create fallback marker labels for streams without metadata.
+
+        Parameters
+        ----------
+        n_markers : int
+            Number of marker names to generate.
+
+        Returns
+        -------
+        list of str
+            Labels in the form ``Marker_1``, ``Marker_2``, and so on.
+        """
         return [f"Marker_{i+1}" for i in range(n_markers)]
 
     def on_close(self):
+        """Close the realtime GUI and any active animation cleanly.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Stops tracking, closes the animation app when present, clears its
+            reference, and destroys the Tk root window.
+        """
         self.stop_tracking()
         if self.animation_app is not None:
             self.animation_app.on_close()

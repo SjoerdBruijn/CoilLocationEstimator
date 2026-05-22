@@ -5,7 +5,37 @@ from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk
 import tkinter as tk
 
 class MarkerSelector:
+    """Interactive Tk/Matplotlib dialog for choosing marker name groups.
+
+    The selector displays one marker frame in 3D, lets the user assign markers
+    to coil, head, and stimulation sets, and mutates the provided selection
+    lists so callers can use the chosen marker names after the dialog closes.
+    """
+
     def __init__(self, markers, markernames,selected_markers_set1,selected_markers_set2,selected_markers_set3, master=None):
+        """Build the marker selection dialog and initialize plot state.
+
+        Parameters
+        ----------
+        markers : numpy.ndarray
+            Marker coordinates shaped ``3 x n_markers`` for a single frame.
+        markernames : list of str
+            Marker names matching the marker columns.
+        selected_markers_set1 : list of str
+            Existing coil marker selections; updated in place by clicks.
+        selected_markers_set2 : list of str
+            Existing head marker selections; updated in place by clicks.
+        selected_markers_set3 : list of str
+            Existing stimulation marker selections; updated in place by clicks.
+        master : tkinter widget, optional
+            Parent window. When omitted, this dialog owns its Tk main loop.
+
+        Returns
+        -------
+        None.
+            The constructor shows the dialog and keeps selection state on the
+            instance until the user finishes.
+        """
         # Create the tkinter window
         self._owns_mainloop = master is None
         if master is None:
@@ -97,7 +127,19 @@ class MarkerSelector:
         else:
             self.master.wait_window()
     def update_plot(self):
-        """Updates the plot to display the marker coordinates."""
+        """Redraw the 3D marker plot with current colors and labels.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Refreshes the scatter data, marker-name text, axis labels, equal
+            axis scaling, and canvas contents while preserving zoom limits when
+            available.
+        """
         # Store current limits before clearing
         if self.xlim is not None and self.ylim is not None and self.zlim is not None:
             self.xlim = self.ax.get_xlim()
@@ -133,7 +175,19 @@ class MarkerSelector:
         self.canvas.draw()
 
     def onpick(self, event):
-        """Event handler for picking a marker."""
+        """Toggle the clicked marker in the active selection set.
+
+        Parameters
+        ----------
+        event : matplotlib.backend_bases.PickEvent
+            Pick event from the scatter plot containing selected marker indices.
+
+        Returns
+        -------
+        None.
+            Mutates the active selected-marker list, updates marker colors, and
+            redraws the plot to reflect the new selection.
+        """
         if event.artist != self.sc:
             return
 
@@ -166,23 +220,79 @@ class MarkerSelector:
         self.update_plot()
 
     def select_set1(self):
+        """Make the coil marker set the active click target.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Sets ``self.current_set`` to ``1``.
+        """
         self.current_set = 1
 
     def select_set2(self):
+        """Make the head marker set the active click target.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Sets ``self.current_set`` to ``2``.
+        """
         self.current_set = 2
 
     def select_set3(self):
+        """Make the stimulation marker set the active click target.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Sets ``self.current_set`` to ``3``.
+        """
         self.current_set = 3
 
     def activate_zoom(self):
-        """Activates zoom mode and stays zoomed after selection."""
+        """Enable Matplotlib zoom mode for the 3D marker plot.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Connects a button-release callback, activates toolbar zoom, and
+            marks zoom mode as active.
+        """
         if not self.zoom_active:
             self.cid_zoom = self.fig.canvas.mpl_connect('button_release_event', self.lock_zoom)
             self.fig.canvas.toolbar.zoom()  # Use the toolbar's zoom method
             self.zoom_active = True
 
     def lock_zoom(self, event):
-        """Keep the current zoom level locked after zoom."""
+        """Store current axis limits after a zoom gesture.
+
+        Parameters
+        ----------
+        event : matplotlib.backend_bases.MouseEvent
+            Mouse release event that ends the zoom interaction.
+
+        Returns
+        -------
+        None.
+            Saves the current axis limits, disables toolbar zoom, disconnects
+            the temporary callback, and clears zoom-active state.
+        """
         self.fig.canvas.toolbar.zoom()  # Lock the zoom level by turning off the zoom tool
 
         # Store the current zoom level
@@ -195,7 +305,17 @@ class MarkerSelector:
         self.zoom_active = False
 
     def reset_zoom(self):
-        """Resets the zoom to the original view."""
+        """Reset stored zoom limits and redraw the full marker view.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Clears stored axis limits and refreshes the plot canvas.
+        """
         self.ax.set_xlim(None)
         self.ax.set_ylim(None)
         self.ax.set_zlim(None)
@@ -203,8 +323,31 @@ class MarkerSelector:
         self.update_plot()
         self.canvas.draw()
     def get_marker_names(self):
+        """Return the current coil, head, and stimulation marker selections.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        tuple of list of str
+            The selected marker-name lists for set 1, set 2, and set 3.
+        """
         return self.selected_markers_set1, self.selected_markers_set2, self.selected_markers_set3
     def done(self):
+        """Close the selector and release any modal Tk grab.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Closes the Matplotlib figure, releases the parent grab when needed,
+            quits a standalone main loop, and destroys the Tk window.
+        """
         plt.close(self.fig)
         if not self._owns_mainloop:
             try:
@@ -216,7 +359,20 @@ class MarkerSelector:
         self.master.destroy()
 
 def set_axes_equal(ax):
-    """Set 3D plot axes to equal scale."""
+    """Set 3D plot axes to equal scale.
+
+    Parameters
+    ----------
+    ax : matplotlib.axes.Axes
+        Three-dimensional axes whose limits should be expanded to a common
+        range.
+
+    Returns
+    -------
+    None.
+        Updates the axes limits in place so marker positions are not visually
+        distorted by unequal scale.
+    """
     x_limits = ax.get_xlim3d()
     y_limits = ax.get_ylim3d()
     z_limits = ax.get_zlim3d()

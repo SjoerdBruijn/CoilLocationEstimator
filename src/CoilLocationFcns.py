@@ -12,16 +12,17 @@ import numpy as np
 
 def select_markers(filename, coilmarkernames=[], headmarkernames=[], stimpointmarkername=[]):
     """
-    Launches a GUI to select coil, head, and stimulation point marker names from a C3D file.
-    
-    Parameters:
-        filename (str): Path to the C3D file.
-        coilmarkernames (list): List of coil marker names (optional).
-        headmarkernames (list): List of head marker names (optional).
-        stimpointmarkername (list): List of stimulation point marker names (optional).
-    
+    Launch a GUI to choose coil, head, and stimulation marker names from a C3D file.
+
+    Args:
+        filename (str): Path to the C3D file used for marker selection.
+        coilmarkernames (list[str]): Preselected coil marker names.
+        headmarkernames (list[str]): Preselected head marker names.
+        stimpointmarkername (list[str]): Preselected coil stimulation marker names.
+
     Returns:
-        tuple: (coilmarkernames, headmarkernames, stimpointmarkername) as selected by the user.
+        tuple: Selected coil marker names, head marker names, and coil
+            stimulation marker names. The C3D data itself is not modified.
     """
     point_data, markernames, firstind = getkindata(filename)
     markerselector = MarkerSelector(point_data[:,:,firstind], markernames,
@@ -32,25 +33,18 @@ def select_markers(filename, coilmarkernames=[], headmarkernames=[], stimpointma
     return coilmarkernames, headmarkernames, stimpointmarkername
 
 
-def select_markers_from_frame(markers, markernames, coilmarkernames=None, headmarkernames=None,
-                              stimpointmarkername=None, master=None):
-    """
-    Launches the marker selector on an in-memory frame instead of a C3D file.
-    """
-    if coilmarkernames is None:
-        coilmarkernames = []
-    if headmarkernames is None:
-        headmarkernames = []
-    if stimpointmarkername is None:
-        stimpointmarkername = []
-    markerselector = MarkerSelector(markers, markernames,
-                                    coilmarkernames,
-                                    headmarkernames,
-                                    stimpointmarkername,
-                                    master=master)
-    return markerselector.get_marker_names()
-    
 def marker_indices(markernames, names_to_find):
+    """
+    Find marker-name indices using case-insensitive suffix matching.
+
+    Args:
+        markernames (list[str]): Full marker labels from a C3D file or stream.
+        names_to_find (list[str]): Marker labels to locate.
+
+    Returns:
+        list[int]: Indices in ``markernames`` for every found name. Missing
+            names are printed and omitted from the result.
+    """
     indices = []
     for name in names_to_find:
         found = False
@@ -64,21 +58,33 @@ def marker_indices(markernames, names_to_find):
     return indices
 
 def extract_marker_data(point_data, firstind, indices):
+    """
+    Extract one sample of XYZ marker coordinates from C3D point data.
+
+    Args:
+        point_data (np.ndarray): C3D points array with dimensions compatible
+            with ezc3d output, typically 4 x n_markers x n_frames.
+        firstind (int): Frame index to extract.
+        indices (list[int]): Marker indices to extract.
+
+    Returns:
+        np.ndarray: Extracted marker coordinates with shape n_markers x 3.
+    """
     return point_data.transpose(2, 0, 1)[firstind, 0:3, indices].T
 
 def getkindata(filename, selectedmarkernames=None):
     """
-    Loads kinematic data and marker labels from a C3D file and finds the first frame where all selected markers are visible.
+    Load C3D point data and find the first usable frame for selected markers.
 
-    Parameters:
+    Args:
         filename (str): Path to the C3D file.
-        selectedmarkernames (list or None): List of marker names to check for visibility. If None, uses all markers.
+        selectedmarkernames (list[str] | None): Marker names used to test
+            visibility. If None, all markers in the file are considered.
 
     Returns:
-        tuple: (point_data, markernames, firstind)
-            point_data (np.ndarray): The marker data array.
-            markernames (list): List of all marker names in the file.
-            firstind (int): Index of the first frame where all selected markers are visible.
+        tuple: ``(point_data, markernames, firstind)`` where ``point_data`` is
+            the ezc3d point array, ``markernames`` is the file label list, and
+            ``firstind`` is the first frame where selected markers are visible.
     """
     c = c3d(filename)
     point_data = c['data']['points']
@@ -98,16 +104,22 @@ def getkindata(filename, selectedmarkernames=None):
 
 def create_coil_data(filename, coilmarkernames=None, headmarkernames=None, stimpointmarkername=None):
     """
-    Creates a coil data structure from a C3D file, containing coil, head, and stimulation point marker data.
+    Create a coil data structure from a reference C3D file.
 
-    Parameters:
-        filename (str): Path to the C3D file.
-        coilmarkernames (list): List of coil marker names.
-        headmarkernames (list): List of head marker names.
-        stimpointmarkername (list): List of stimulation point marker names.
+    Args:
+        filename (str): Path to the coil reference C3D file.
+        coilmarkernames (list[str] | None): Coil marker names. If empty, the
+            marker selector is opened.
+        headmarkernames (list[str] | None): Head marker names. If empty, the
+            marker selector is opened.
+        stimpointmarkername (list[str] | None): Coil stimulation marker names.
+            If empty, the marker selector is opened.
 
     Returns:
-        dict: Coil data structure with marker names and corresponding data arrays.
+        dict: Coil data structure containing marker names and reference
+            coordinate arrays for ``coilrefdata``, ``headrefdata``, and
+            ``coilstimpointrefdata``. Data are taken from the first frame where
+            all selected markers are visible.
     """
     if coilmarkernames is None:
         coilmarkernames = []
@@ -137,51 +149,27 @@ def create_coil_data(filename, coilmarkernames=None, headmarkernames=None, stimp
     return coildatastructure
 
 
-def create_coil_data_from_frame(markers, markernames, coilmarkernames=None, headmarkernames=None,
-                                stimpointmarkername=None, master=None):
-    """
-    Creates a coil data structure from a single marker frame.
-    """
-    if coilmarkernames is None:
-        coilmarkernames = []
-    if headmarkernames is None:
-        headmarkernames = []
-    if stimpointmarkername is None:
-        stimpointmarkername = []
-
-    if (coilmarkernames == [] or
-        headmarkernames == [] or
-        stimpointmarkername == []):
-        coilmarkernames, headmarkernames, stimpointmarkername = select_markers_from_frame(
-            markers, markernames, coilmarkernames, headmarkernames, stimpointmarkername, master=master)
-
-    coildatastructure = {
-        "coilrefdata": {"names": coilmarkernames},
-        "headrefdata": {"names": headmarkernames},
-        "coilstimpointrefdata": {"names": stimpointmarkername}
-    }
-    marker_frame = np.asarray(markers)
-    if marker_frame.shape[0] != 3:
-        raise ValueError("Expected markers with shape 3 x n_markers.")
-
-    for key in coildatastructure:
-        index = marker_indices(markernames, coildatastructure[key]["names"])
-        coildatastructure[key]["data"] = marker_frame[:, index].T
-    return coildatastructure
-
-
 def create_headrefdata(filename, coildatastructure, sample_number=None):
     """
-    Adds experiment-specific head reference data to an existing coil data structure.
+    Add head-reference data from a C3D file to an existing coil data structure.
 
-    Parameters:
-        filename (str): Path to the experimental C3D file.
-        coildatastructure (dict): Coil data structure created by create_coil_data.
-        sample_number (int or None): Zero-based sample to use as head reference.
-            If None, uses the first sample where all required markers are visible.
+    Args:
+        filename (str): Path to the head-reference C3D file.
+        coildatastructure (dict): Coil data structure created by
+            ``create_coil_data`` or loaded from JSON.
+        sample_number (int | None): Zero-based frame index to use as the head
+            reference. If None, uses the first frame where required markers are
+            visible.
 
     Returns:
-        dict: The updated coil data structure.
+        dict: The same ``coildatastructure`` object, updated in place with
+            ``headrefdata["data"]`` and ``headstimpointrefdata``. The head
+            stimulation reference point is computed by transforming
+            ``coilstimpointrefdata`` to the coil pose at ``sample_number``.
+
+    Raises:
+        IndexError: If ``sample_number`` is outside the C3D frame range.
+        ValueError: If required head or coil markers are missing.
     """
 
     if coildatastructure["headrefdata"]["names"] == []:
@@ -216,64 +204,39 @@ def create_headrefdata(filename, coildatastructure, sample_number=None):
     coildatastructure["headrefdata"]["data"] = extract_marker_data(
         point_data, sample_number, headindex)
 
-    experimental_headdata = point_data.transpose(2, 0, 1)[:, 0:3, headindex]
     experimental_coildata = point_data.transpose(2, 0, 1)[:, 0:3, coilindex]
 
-    _, coilstimpoint_at_reference, _, _ = rigidbodytransform(
+    _,  coildatastructure["headstimpointrefdata"], _, _ = rigidbodytransform(
         coildatastructure["coilrefdata"]["data"],
         experimental_coildata[sample_number:sample_number + 1],
         coildatastructure["coilstimpointrefdata"]["data"])
-
-    coildatastructure["headstimpointrefdata"] = coilstimpoint_at_reference
     
-
-    return coildatastructure
-
-
-def create_headrefdata_from_frame(markers, markernames, coildatastructure, master=None):
-    """
-    Adds head reference data to an existing coil data structure from one marker frame.
-    """
-    marker_frame = np.asarray(markers)
-    if marker_frame.shape[0] != 3:
-        raise ValueError("Expected markers with shape 3 x n_markers.")
-
-    if coildatastructure["headrefdata"]["names"] == []:
-        _, coildatastructure["headrefdata"]["names"], _ = select_markers_from_frame(
-            marker_frame,
-            markernames,
-            coildatastructure["coilrefdata"]["names"],
-            coildatastructure["headrefdata"]["names"],
-            coildatastructure["coilstimpointrefdata"]["names"],
-            master=master)
-
-    headindex = marker_indices(markernames, coildatastructure["headrefdata"]["names"])
-    coilindex = marker_indices(markernames, coildatastructure["coilrefdata"]["names"])
-
-    if len(headindex) != len(coildatastructure["headrefdata"]["names"]):
-        raise ValueError("Not all head markers were found in the marker frame.")
-    if len(coilindex) != len(coildatastructure["coilrefdata"]["names"]):
-        raise ValueError("Not all coil markers were found in the marker frame.")
-
-    coildatastructure["headrefdata"]["data"] = marker_frame[:, headindex].T
-    coil_exp_data = marker_frame[:, coilindex][np.newaxis, :, :]
-
-    _, coildatastructure["headstimpointrefdata"], _, _ = rigidbodytransform(
-        coildatastructure["coilrefdata"]["data"],
-        coil_exp_data,
-        coildatastructure["coilstimpointrefdata"]["data"])
-
     return coildatastructure
 
 
 def _empty_marker_array():
+    """
+    Create the canonical empty marker-coordinate array.
+
+    Returns:
+        np.ndarray: Empty float array with shape 0 x 3, used when reference
+            marker data is intentionally absent.
+    """
     return np.empty((0, 3))
 
 
 def sanitize_coildatastructure_for_save(coildatastructure):
     """
-    Creates a serializable copy of the coil data structure while excluding
-    live head-reference data and any head stimulation point data.
+    Convert coil reference data to a JSON-serializable dictionary.
+
+    Args:
+        coildatastructure (dict): Runtime coil data structure containing numpy
+            arrays.
+
+    Returns:
+        dict: Serializable copy that preserves coil and coil-stim reference data
+            while clearing ``headrefdata["data"]`` and omitting any head
+            stimulation reference fields.
     """
     sanitized = {}
     for key in ["coilrefdata", "headrefdata", "coilstimpointrefdata"]:
@@ -295,6 +258,19 @@ def sanitize_coildatastructure_for_save(coildatastructure):
 
 
 def _normalize_loaded_coildatastructure(raw_structure):
+    """
+    Normalize a JSON-loaded coil data structure into runtime numpy arrays.
+
+    Args:
+        raw_structure (dict): Dictionary read from a JSON coil-data file. Both
+            legacy ``stimpointrefdata`` and current ``coilstimpointrefdata`` are
+            accepted.
+
+    Returns:
+        dict: Normalized coil data structure with numpy arrays. Head reference
+            data is deliberately cleared to an empty 0 x 3 array for plain coil
+            data loads.
+    """
     normalized = {}
     for key in ["coilrefdata", "headrefdata", "coilstimpointrefdata"]:
         source_key = "stimpointrefdata" if key == "coilstimpointrefdata" else key
@@ -319,8 +295,14 @@ def _normalize_loaded_coildatastructure(raw_structure):
 
 def save_coildatastructure(coildatastructure, filename):
     """
-    Saves the coil data structure to JSON, excluding head reference data and
-    any head stimulation point data.
+    Save coil reference data to JSON without head-reference data.
+
+    Args:
+        coildatastructure (dict): Runtime coil data structure to serialize.
+        filename (str): Output JSON path.
+
+    Returns:
+        None: Writes a JSON file and does not mutate ``coildatastructure``.
     """
     serializable = sanitize_coildatastructure_for_save(coildatastructure)
     with open(filename, "w", encoding="utf-8") as file:
@@ -329,7 +311,15 @@ def save_coildatastructure(coildatastructure, filename):
 
 def load_coildatastructure(filename):
     """
-    Loads a coil data structure from JSON and restores numpy arrays.
+    Load coil reference data from JSON.
+
+    Args:
+        filename (str): Path to a JSON file created by
+            ``save_coildatastructure`` or an older compatible version.
+
+    Returns:
+        dict: Runtime coil data structure with numpy arrays. Head reference
+            coordinate data is cleared to the canonical empty 0 x 3 array.
     """
     with open(filename, "r", encoding="utf-8") as file:
         raw_structure = json.load(file)
@@ -338,8 +328,15 @@ def load_coildatastructure(filename):
 
 def sanitize_headrefdata_for_save(coildatastructure):
     """
-    Creates a serializable copy of the coil data structure including
-    head reference data and optional head stimulation point data.
+    Convert coil and head reference data to a JSON-serializable dictionary.
+
+    Args:
+        coildatastructure (dict): Runtime coil data structure containing head
+            reference data and optionally ``headstimpointrefdata``.
+
+    Returns:
+        dict: Serializable copy including all reference arrays needed to reuse
+            the head reference later.
     """
     sanitized = {}
     for key in ["coilrefdata", "headrefdata", "coilstimpointrefdata"]:
@@ -361,8 +358,15 @@ def sanitize_headrefdata_for_save(coildatastructure):
 
 def save_headrefdata(coildatastructure, filename):
     """
-    Saves coil reference data together with head reference data and optional
-    head stimulation point data.
+    Save coil and head reference data to JSON.
+
+    Args:
+        coildatastructure (dict): Runtime coil data structure containing
+            ``headrefdata`` and ``headstimpointrefdata``.
+        filename (str): Output JSON path.
+
+    Returns:
+        None: Writes a JSON file and does not mutate ``coildatastructure``.
     """
     serializable = sanitize_headrefdata_for_save(coildatastructure)
     with open(filename, "w", encoding="utf-8") as file:
@@ -371,8 +375,14 @@ def save_headrefdata(coildatastructure, filename):
 
 def load_headrefdata(filename):
     """
-    Loads coil reference data together with head reference data and optional
-    head stimulation point data.
+    Load coil and head reference data from JSON.
+
+    Args:
+        filename (str): Path to a JSON file created by ``save_headrefdata``.
+
+    Returns:
+        dict: Runtime coil data structure with numpy arrays, including
+            ``headrefdata["data"]`` and ``headstimpointrefdata`` when present.
     """
     with open(filename, "r", encoding="utf-8") as file:
         raw_structure = json.load(file)
@@ -396,22 +406,93 @@ def load_headrefdata(filename):
     return normalized
 
 
-def get_coil_displacement(expfilename, coildatastructure):
+def _make_json_serializable(value):
     """
-    Computes coil displacement and updates the coil data structure using experimental data.
+    Convert runtime result data into JSON-compatible Python containers.
 
-    Parameters:
-        expfilename (str): Path to the experimental C3D file.
-        coildatastructure (dict): Coil data structure with reference data.
+    Args:
+        value: Any value from a coil displacement or coil data structure,
+            including dictionaries, lists, tuples, numpy arrays, and numpy scalar
+            types.
 
     Returns:
-        tuple: (coildisplacement, coildatastructure)
-            coildisplacement (dict): Displacement data for head and coil markers, and calculated stimulation points.
-            coildatastructure (dict): Updated coil data structure.
+        object: A JSON-serializable version of ``value``. Numpy arrays become
+            nested lists, numpy scalars become native Python scalars, and
+            dictionaries/lists are converted recursively without mutating the
+            original data.
     """
-    if (coildatastructure["headrefdata"]['data'].size == 0 or
-            "headstimpointrefdata" not in coildatastructure):
-        coildatastructure = create_headrefdata(expfilename, coildatastructure)
+    if isinstance(value, dict):
+        return {key: _make_json_serializable(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_make_json_serializable(item) for item in value]
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if isinstance(value, np.generic):
+        return value.item()
+    return value
+
+
+def save_results(coildisplacement, coildatastructure=None, filename=None):
+    """
+    Save computed coil displacement results to a JSON file.
+
+    Args:
+        coildisplacement (dict): Result dictionary returned by
+            ``get_coil_displacement`` or ``get_coil_displacement_from_frame``.
+        coildatastructure (dict | None): Optional reference data structure to
+            save alongside the computed displacement data.
+        filename (str | None): Destination path. If None, a save-file dialog is
+            opened and the user is asked where to save the results.
+
+    Returns:
+        str | None: The path written, or None if the user cancels the save
+            dialog. The input dictionaries are not modified.
+    """
+    if filename is None:
+        from tkinter import filedialog
+
+        filename = filedialog.asksaveasfilename(
+            title="Save coil displacement results",
+            defaultextension=".json",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
+        )
+    if not filename:
+        return None
+
+    results = {"coildisplacement": coildisplacement}
+    if coildatastructure is not None:
+        results["coildatastructure"] = coildatastructure
+
+    with open(filename, "w") as file:
+        json.dump(_make_json_serializable(results), file, indent=2)
+    return filename
+
+
+def get_coil_displacement(expfilename, coildatastructure):
+    """
+    Compute head and coil motion across an experimental C3D file.
+
+    Args:
+        expfilename (str): Path to the experimental C3D file.
+        coildatastructure (dict): Coil/head reference structure containing coil
+            reference data, head reference data, coil stimulation point reference
+            data, and head stimulation point reference data.
+
+    Returns:
+        tuple: ``(coildisplacement, coildatastructure)``. ``coildisplacement``
+            contains experimental marker arrays (``headexpdata`` and
+            ``coilexpdata``), transformed stimulation point trajectories, marker
+            names, and rigid-body rotations. ``coildatastructure`` is returned
+            unchanged.
+
+    Raises:
+        ValueError: If head reference data or head stimulation point reference
+            data are missing.
+    """
+    if coildatastructure["headrefdata"]['data'].size == 0:
+        raise ValueError("Create or load head reference data before showing experimental data.")
+    if "headstimpointrefdata" not in coildatastructure:
+        raise ValueError("Create or load head stimulation point reference data before showing experimental data.")
 
     allmarkernames = coildatastructure["headrefdata"]["names"] + \
         coildatastructure["coilrefdata"]["names"]
@@ -442,8 +523,30 @@ def get_coil_displacement(expfilename, coildatastructure):
 
 def get_coil_displacement_from_frame(markers, markernames, coildatastructure):
     """
-    Computes coil displacement for a single in-memory frame.
+    Compute head and coil displacement for one in-memory marker frame.
+
+    Args:
+        markers (np.ndarray): Current marker coordinates with shape 3 x n_markers.
+        markernames (list[str]): Names corresponding to marker columns.
+        coildatastructure (dict): Coil/head reference structure.
+
+    Returns:
+        tuple: ``(coildisplacement, coildatastructure)`` for a single frame.
+            The displacement dictionary has one-sample arrays for
+            ``headexpdata``, ``coilexpdata``, ``headstimpoint``, and
+            ``coilstimpoint``. The input ``coildatastructure`` is returned
+            unchanged.
+
+    Raises:
+        ValueError: If the marker frame has an invalid shape or required
+            markers, head reference data, or head stimulation point reference
+            data are missing.
     """
+    if coildatastructure["headrefdata"]["data"].size == 0:
+        raise ValueError("Create or load head reference data before live tracking.")
+    if "headstimpointrefdata" not in coildatastructure:
+        raise ValueError("Create or load head stimulation point reference data before live tracking.")
+
     required_markernames = (
         coildatastructure["headrefdata"]["names"] +
         coildatastructure["coilrefdata"]["names"]
@@ -457,13 +560,10 @@ def get_coil_displacement_from_frame(markers, markernames, coildatastructure):
     if marker_frame.shape[0] != 3:
         raise ValueError("Expected markers with shape 3 x n_markers.")
 
-    if coildatastructure["headrefdata"]['data'].size == 0:
-        index = marker_indices(markernames, coildatastructure["headrefdata"]["names"])
-        coildatastructure["headrefdata"]["data"] = marker_frame[:, index].T
-
     headrefdata = coildatastructure["headrefdata"]["data"]
     coilrefdata = coildatastructure["coilrefdata"]["data"]
     point = coildatastructure["coilstimpointrefdata"]["data"]
+    headpoint = coildatastructure["headstimpointrefdata"]
 
     coildisplacement = dict()
     coildisplacement["headmarkernames"] = coildatastructure["headrefdata"]["names"]
@@ -475,7 +575,6 @@ def get_coil_displacement_from_frame(markers, markernames, coildatastructure):
 
     coildisplacement['coilR'], coildisplacement["coilstimpoint"], _, _ = rigidbodytransform(
         coilrefdata, coildisplacement["coilexpdata"], point)
-    headpoint = coildatastructure.get("headstimpointrefdata", coildisplacement["coilstimpoint"][0])
     coildisplacement['headR'], coildisplacement["headstimpoint"], _, _ = rigidbodytransform(
         headrefdata, coildisplacement["headexpdata"], headpoint)
 
@@ -484,20 +583,24 @@ def get_coil_displacement_from_frame(markers, markernames, coildatastructure):
 
 def rigidbodytransform(A, B, virt_marker=None):
     """
-    Computes the rotation matrices that align A to B for each time sample,
-    handling cases where B contains NaN values, and calculates the position of the virtual marker in B.
+    Align reference markers to experimental markers with a rigid-body transform.
 
-    Parameters:
-        A (numpy.ndarray): An m x 3 x n array of points.
-        B (numpy.ndarray): An m x 3 x n array of points.
-        virt_marker (numpy.ndarray): A 1 x 3 array representing the position of the virtual marker in the coordinate system of A.
+    Args:
+        A (np.ndarray): Reference marker coordinates as n_samples x 3 x
+            n_markers, or a single 3 x n_markers / n_markers x 3 reference pose
+            that can be tiled across samples.
+        B (np.ndarray): Target marker coordinates with shape n_samples x 3 x
+            n_markers. Samples with fewer than three visible markers are left as
+            NaN in the outputs.
+        virt_marker (np.ndarray | None): Optional virtual marker coordinates in
+            the coordinate system of ``A``. If provided, these points are
+            transformed into the coordinate system of each ``B`` sample.
 
     Returns:
-        tuple: (R, virt_marker_in_B, t, rmsd)
-            R (numpy.ndarray): An m x 3 x 3 array of rotation matrices for each time sample.
-            virt_marker_in_B (numpy.ndarray): An m x 3 array representing the position of the virtual marker in the coordinate system of B for each time sample.
-            t (numpy.ndarray): Translation vectors for each time sample.
-            rmsd (numpy.ndarray): Root mean square deviation for each time sample.
+        tuple: ``(R, virt_marker_in_B, t, rmsd)`` where ``R`` contains rotation
+            matrices, ``virt_marker_in_B`` contains transformed virtual marker
+            positions, ``t`` contains translations, and ``rmsd`` contains
+            per-sample residual error.
     """
     if virt_marker is None:
        virt_marker= np.full((1,3, 1), np.nan)

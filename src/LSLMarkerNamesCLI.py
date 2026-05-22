@@ -8,6 +8,19 @@ from pylsl import StreamInlet, resolve_streams
 
 
 def extract_marker_names(stream_info):
+    """Extract marker labels from LSL stream metadata.
+
+    Parameters
+    ----------
+    stream_info : pylsl.StreamInfo
+        Full metadata object returned by a stream inlet.
+
+    Returns
+    -------
+    list of str
+        Marker labels from ``markers`` metadata, channel metadata, or generated
+        defaults when the channel count implies XYZ or XYZW marker groups.
+    """
     names = extract_marker_names_from_markers(stream_info)
     if len(names) > 0:
         return names
@@ -44,6 +57,19 @@ def extract_marker_names(stream_info):
 
 
 def extract_marker_names_from_markers(stream_info):
+    """Read marker names from a stream's ``markers`` metadata block.
+
+    Parameters
+    ----------
+    stream_info : pylsl.StreamInfo
+        Full stream metadata that may contain marker child nodes.
+
+    Returns
+    -------
+    list of str
+        Marker labels found in the metadata, or an empty list if the block is
+        missing or unreadable.
+    """
     names = []
     try:
         markers = stream_info.desc().child("markers")
@@ -59,10 +85,37 @@ def extract_marker_names_from_markers(stream_info):
 
 
 def default_marker_names(n_markers):
+    """Create fallback marker names for streams without labels.
+
+    Parameters
+    ----------
+    n_markers : int
+        Number of marker names to generate.
+
+    Returns
+    -------
+    list of str
+        Labels in the form ``Marker_1`` through ``Marker_N``.
+    """
     return [f"Marker_{i + 1}" for i in range(n_markers)]
 
 
 def find_matching_stream(streams, stream_name):
+    """Select an LSL stream by name or return the first available stream.
+
+    Parameters
+    ----------
+    streams : sequence
+        Resolved LSL stream info objects.
+    stream_name : str or None
+        Requested stream name. When ``None``, the first stream is selected.
+
+    Returns
+    -------
+    pylsl.StreamInfo or None
+        Matching stream info object, the first stream when no name is provided,
+        or ``None`` when no match is found.
+    """
     if stream_name is None:
         return streams[0] if len(streams) > 0 else None
 
@@ -73,6 +126,18 @@ def find_matching_stream(streams, stream_name):
 
 
 def main():
+    """Run the command-line marker-name inspection utility.
+
+    Parameters
+    ----------
+    None.
+
+    Returns
+    -------
+    int
+        Process status code: ``0`` after printing marker names, ``1`` when no
+        stream is available or the requested stream is missing.
+    """
     parser = argparse.ArgumentParser(description="Show marker names from an LSL stream.")
     parser.add_argument("--stream-name", help="Name of the LSL stream to inspect.")
     parser.add_argument(

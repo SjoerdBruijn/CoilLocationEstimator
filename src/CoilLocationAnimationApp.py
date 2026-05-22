@@ -47,6 +47,24 @@ class AnimationApp:
     """
 
     def __init__(self,coildatastruct, master=None, auto_mainloop=True, live_mode=False, on_close_callback=None):
+        """
+        Build a Tk/Matplotlib animation window from displacement data.
+
+        Args:
+            coildatastruct (dict): Displacement dictionary containing
+                ``headexpdata``, ``coilexpdata``, ``headstimpoint``, and
+                ``coilstimpoint`` arrays plus optional marker names.
+            master (tk.Widget | None): Optional parent Tk window. When present,
+                this app is opened as a child ``Toplevel``.
+            auto_mainloop (bool): Whether to start Tk's main loop immediately.
+            live_mode (bool): Whether the window receives appended live frames.
+            on_close_callback (callable | None): Callback invoked after the plot
+                window is closed.
+
+        Returns:
+            None: Initializes widgets and copies plotting arrays into instance
+            state.
+        """
         self.live_mode = live_mode
         self._owns_mainloop = master is None
         self.on_close_callback = on_close_callback
@@ -146,6 +164,12 @@ class AnimationApp:
             self.root.mainloop()
 
     def on_close(self):
+        """
+        Close the animation window and stop pending animation callbacks.
+
+        Returns:
+            None: Sets ``closed`` and invokes ``on_close_callback`` if present.
+        """
         if self.closed:
             return
         self.closed = True
@@ -156,17 +180,46 @@ class AnimationApp:
             self.root.destroy()
 
     def _compute_dist(self):
+        """
+        Compute component-wise stimpoint displacement for the time-series plot.
+
+        Returns:
+            np.ndarray: Array with shape n_frames x 3 containing
+            ``coilstimpoint - headstimpoint`` for each frame.
+        """
         return self.coilstimpoint[:, :, 0] - self.headstimpoint[:, :, 0]
 
     def _compute_euclidean_distance(self, frame):
+        """
+        Compute scalar distance between head and coil stimulation points.
+
+        Args:
+            frame (int): Frame index to evaluate.
+
+        Returns:
+            float: Euclidean norm of the stimpoint displacement at ``frame``.
+        """
         displacement = self.coilstimpoint[frame, :, 0] - self.headstimpoint[frame, :, 0]
         return np.linalg.norm(displacement)
 
     def _update_distance_label(self):
+        """
+        Update the Tk label showing the current Euclidean stimpoint distance.
+
+        Returns:
+            None: Mutates the ``distance_text`` StringVar.
+        """
         distance = self._compute_euclidean_distance(self.current_frame)
         self.distance_text.set(f"eucledian distance: {distance:.2f} mm")
 
     def _create_marker_texts(self):
+        """
+        Create hidden 3D text artists for marker labels.
+
+        Returns:
+            None: Populates ``marker_texts`` with head and coil marker label
+            artists that can later be toggled visible.
+        """
         for marker_index, name in enumerate(self.headmarkernames[:self.head.shape[2]]):
             text = self.ax2.text(
                 self.head[0, 0, marker_index],
@@ -188,6 +241,12 @@ class AnimationApp:
             self.marker_texts.append((text, "coil", marker_index))
 
     def _toggle_marker_names(self):
+        """
+        Toggle marker label visibility from the checkbox state.
+
+        Returns:
+            None: Shows or hides existing text artists and redraws the canvas.
+        """
         show_names = self.show_marker_names.get()
         for text, _, _ in self.marker_texts:
             text.set_visible(show_names)
@@ -196,6 +255,13 @@ class AnimationApp:
         self.canvas.draw_idle()
 
     def _update_marker_texts(self):
+        """
+        Move visible marker labels to the current frame's marker coordinates.
+
+        Returns:
+            None: Mutates Matplotlib text artist positions when labels are
+            enabled.
+        """
         if not self.show_marker_names.get():
             return
         for text, marker_group, marker_index in self.marker_texts:
@@ -205,6 +271,12 @@ class AnimationApp:
             text.set_3d_properties(data[self.current_frame, 2, marker_index], zdir='z')
 
     def _refresh_timeseries(self):
+        """
+        Refresh time-series line data after appending frames.
+
+        Returns:
+            None: Recomputes displacement data and rescales the left subplot.
+        """
         self.dist = self._compute_dist()
         x = np.arange(self.dist.shape[0])
         for index, line in enumerate(self.line):
@@ -212,23 +284,48 @@ class AnimationApp:
         self.ax1.relim()
         self.ax1.autoscale_view()
     def play(self):
+        """
+        Start advancing frames using Tk's timer.
+
+        Returns:
+            None: Updates pause state and schedules the next animation tick.
+        """
         if not self.is_paused:
             return
         self.is_paused = False
         self._schedule_next_frame()
     
     def pause(self):
+        """
+        Stop frame advancement and cancel any scheduled Tk timer.
+
+        Returns:
+            None: Updates pause state and clears ``after_job``.
+        """
         self.is_paused = True
         if self.after_job is not None:
             self.root.after_cancel(self.after_job)
             self.after_job = None
 
     def _schedule_next_frame(self):
+        """
+        Schedule one future animation tick if playback is active.
+
+        Returns:
+            None: Stores the Tk ``after`` job identifier in ``after_job``.
+        """
         if self.is_paused or self.after_job is not None:
             return
         self.after_job = self.root.after(self.frame_interval_ms, self._tick)
 
     def _tick(self):
+        """
+        Advance the plot by one frame during playback.
+
+        Returns:
+            None: Updates plot artists, redraws the canvas, and schedules the
+            next frame when playback remains active.
+        """
         self.after_job = None
         if self.is_paused:
             return
@@ -239,6 +336,15 @@ class AnimationApp:
             self._schedule_next_frame()
 
     def slider_update(self, val):
+        """
+        Handle manual slider movement.
+
+        Args:
+            val (float | str): Slider value supplied by Tk.
+
+        Returns:
+            None: Updates ``current_frame`` and redraws the plot.
+        """
         if not self.slider_moving:  # Avoid recursion by checking if the slider is manually moved
             self.slider_moving = True
             self.current_frame = int(float(val))
@@ -247,6 +353,17 @@ class AnimationApp:
             self.slider_moving = False
 
     def update_plot(self, frame, force_distance_update=False):
+        """
+        Update all plot artists to display a specific frame.
+
+        Args:
+            frame (int): Frame index to show.
+            force_distance_update (bool): Whether to refresh the distance label
+                even if distance updates are being throttled.
+
+        Returns:
+            list: Matplotlib line artists for the time-series subplot.
+        """
         if self.num_frames == 0:
             return self.line
 
@@ -285,13 +402,28 @@ class AnimationApp:
 
     def append_frame(self, coildatastruct):
         """
-        Append one live frame and redraw the existing animation window.
+        Append one live displacement frame to the animation.
+
+        Args:
+            coildatastruct (dict): Single-frame displacement dictionary with
+                the same keys used at initialization.
+
+        Returns:
+            None: Delegates to ``append_frames`` and mutates stored arrays.
         """
         self.append_frames([coildatastruct])
 
     def append_frames(self, coildatastructs):
         """
-        Append multiple live frames and redraw once.
+        Append multiple live displacement frames and redraw once.
+
+        Args:
+            coildatastructs (list[dict]): Sequence of single-frame displacement
+                dictionaries.
+
+        Returns:
+            None: Concatenates new frame arrays, trims live history when needed,
+            refreshes the slider and plot.
         """
         if len(coildatastructs) == 0:
             return
@@ -322,7 +454,15 @@ class AnimationApp:
     
     
 def set_axes_equal(ax):
-    """Set 3D plot axes to equal scale."""
+    """
+    Set a Matplotlib 3D axis to equal x/y/z scale.
+
+    Args:
+        ax (matplotlib.axes.Axes): 3D axes whose limits should be adjusted.
+
+    Returns:
+        None: Mutates the axes limits so plotted geometry is not distorted.
+    """
     x_limits = ax.get_xlim3d()
     y_limits = ax.get_ylim3d()
     z_limits = ax.get_zlim3d()

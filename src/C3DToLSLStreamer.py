@@ -16,6 +16,21 @@ except ImportError:  # pragma: no cover - depends on local environment
 
 
 def normalize_marker_names(marker_names, expected_count):
+    """Normalize raw C3D marker labels to a fixed number of usable names.
+
+    Parameters
+    ----------
+    marker_names : sequence
+        Raw marker labels read from C3D metadata.
+    expected_count : int
+        Number of marker labels required by the point data.
+
+    Returns
+    -------
+    list of str
+        Trimmed marker names with generated ``Marker_N`` fallbacks for missing
+        or empty labels.
+    """
     normalized_names = []
     for index in range(expected_count):
         raw_name = marker_names[index] if index < len(marker_names) else ""
@@ -27,6 +42,20 @@ def normalize_marker_names(marker_names, expected_count):
 
 
 def load_c3d_stream_data(filename):
+    """Load point data, marker names, and frame rate from a C3D file.
+
+    Parameters
+    ----------
+    filename : str
+        Path to the C3D file to stream.
+
+    Returns
+    -------
+    tuple
+        ``(point_data, marker_names, frame_rate)`` where ``point_data`` is a
+        ``3 x n_markers x n_frames`` coordinate array, ``marker_names`` are
+        normalized labels, and ``frame_rate`` is the POINT sampling rate.
+    """
     c3d_data = c3d(filename)
     point_data = c3d_data["data"]["points"][0:3, :, :]
     raw_marker_names = list(c3d_data["parameters"]["POINT"]["LABELS"]["value"])
@@ -36,6 +65,21 @@ def load_c3d_stream_data(filename):
 
 
 def add_marker_metadata(description, marker_names):
+    """Append marker and channel metadata to an LSL stream description.
+
+    Parameters
+    ----------
+    description : pylsl.XMLElement
+        Mutable LSL description node returned by ``StreamInfo.desc()``.
+    marker_names : list of str
+        Marker labels to expose in stream metadata.
+
+    Returns
+    -------
+    None.
+        Mutates ``description`` by adding ``markers`` and ``channels`` nodes
+        with XYZ channel labels and units.
+    """
     markers = description.append_child("markers")
     for marker_name in marker_names:
         marker = markers.append_child("marker")
@@ -53,6 +97,22 @@ def add_marker_metadata(description, marker_names):
 
 
 def create_marker_stream_info(stream_name, frame_rate, marker_names):
+    """Create LSL stream metadata for streaming 3D marker coordinates.
+
+    Parameters
+    ----------
+    stream_name : str
+        Name advertised for the LSL stream.
+    frame_rate : float
+        Sampling rate in frames per second.
+    marker_names : list of str
+        Marker labels; each marker contributes X, Y, and Z channels.
+
+    Returns
+    -------
+    pylsl.StreamInfo
+        Configured stream info with channel count and marker metadata.
+    """
     if StreamInfo is None:
         raise RuntimeError("LSL support is unavailable. Install 'pylsl' first.")
 
@@ -69,7 +129,26 @@ def create_marker_stream_info(stream_name, frame_rate, marker_names):
 
 
 class C3DToLSLStreamer:
+    """Tkinter app that replays C3D marker coordinates as an LSL stream.
+
+    The app loads C3D point data into memory, creates marker-aware LSL stream
+    metadata, and pushes one flattened XYZ frame per timer tick at the C3D frame
+    rate.
+    """
+
     def __init__(self):
+        """Initialize stream state, build the Tk GUI, and start the event loop.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Stores loaded C3D data and streaming state on the instance while the
+            user controls playback.
+        """
         self.filename = None
         self.point_data = None
         self.marker_names = []
@@ -114,9 +193,34 @@ class C3DToLSLStreamer:
         self.root.mainloop()
 
     def set_status(self, message):
+        """Show the current loading or streaming state in the GUI.
+
+        Parameters
+        ----------
+        message : str
+            Status text to display.
+
+        Returns
+        -------
+        None.
+            Updates only the status label.
+        """
         self.status_label.config(text=message)
 
     def select_file(self):
+        """Select and load a C3D file for streaming.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Updates ``self.filename``, ``self.point_data``,
+            ``self.marker_names``, ``self.frame_rate``, and resets
+            ``self.current_frame``.
+        """
         filename = filedialog.askopenfilename(filetypes=[("C3D files", "*.c3d"), ("All files", "*.*")])
         if not filename:
             return
@@ -131,6 +235,18 @@ class C3DToLSLStreamer:
         )
 
     def start_streaming(self):
+        """Start broadcasting loaded C3D marker frames over LSL.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Creates stream metadata and an outlet, resets timing/frame state,
+            marks streaming active, and schedules the first frame push.
+        """
         if StreamInfo is None:
             self.set_status("LSL support is unavailable. Install 'pylsl' first.")
             return
@@ -149,6 +265,18 @@ class C3DToLSLStreamer:
         self._schedule_next_frame()
 
     def stop_streaming(self):
+        """Stop the LSL replay and clear transient stream objects.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Sets streaming false and clears the outlet, stream info, and next
+            push timestamp.
+        """
         self.streaming = False
         self.outlet = None
         self.stream_info = None
@@ -156,15 +284,51 @@ class C3DToLSLStreamer:
         self.set_status("Streaming stopped.")
 
     def _create_stream_info(self):
+        """Build LSL stream metadata from the current GUI settings.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        pylsl.StreamInfo
+            Marker stream information using the current stream name, frame rate,
+            and marker labels.
+        """
         stream_name = self.stream_name_var.get().strip() or "C3DMarkers"
         return create_marker_stream_info(stream_name, self.frame_rate, self.marker_names)
 
     def _schedule_next_frame(self):
+        """Schedule the next frame push if streaming is active.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Registers a Tk ``after`` callback to call ``push_next_frame``.
+        """
         if not self.streaming:
             return
         self.root.after(1, self.push_next_frame)
 
     def push_next_frame(self):
+        """Push the next C3D frame to the LSL outlet at playback timing.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Flattens the current ``3 x n_markers`` frame into XYZ channel order,
+            sends it to LSL, advances or loops ``self.current_frame``, updates
+            timing, and schedules the next push.
+        """
         if not self.streaming or self.outlet is None or self.point_data is None:
             return
 
@@ -192,6 +356,18 @@ class C3DToLSLStreamer:
         self._schedule_next_frame()
 
     def on_close(self):
+        """Close the streamer GUI and stop any active LSL stream.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Stops streaming, releases transient stream objects, and destroys the
+            Tk root window.
+        """
         self.stop_streaming()
         self.root.destroy()
 

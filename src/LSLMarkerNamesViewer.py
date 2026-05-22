@@ -11,7 +11,26 @@ except ImportError:  # pragma: no cover - depends on local environment
 
 
 class LSLMarkerNamesViewer:
+    """Tkinter utility for inspecting marker names advertised by LSL streams.
+
+    The viewer discovers streams, lets the user choose one, reads its metadata
+    through an inlet, and displays marker labels inferred from marker or channel
+    metadata.
+    """
+
     def __init__(self):
+        """Create the viewer window, initialize widgets, and list streams.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Starts the Tkinter main loop and stores discovered streams on the
+            instance for later selection.
+        """
         self.streams = []
 
         self.root = tk.Tk()
@@ -47,9 +66,34 @@ class LSLMarkerNamesViewer:
         self.root.mainloop()
 
     def set_status(self, message):
+        """Display a stream discovery or marker extraction status message.
+
+        Parameters
+        ----------
+        message : str
+            Status text shown at the bottom of the viewer.
+
+        Returns
+        -------
+        None.
+            Updates only the status label.
+        """
         self.status_label.config(text=message)
 
     def refresh_streams(self):
+        """Resolve available LSL streams and refresh the stream list.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Clears the stream and marker listboxes, updates ``self.streams``
+            with resolved streams, selects the first stream when present, and
+            reports discovery state in the status label.
+        """
         self.stream_listbox.delete(0, tk.END)
         self.marker_listbox.delete(0, tk.END)
         self.streams = []
@@ -72,6 +116,18 @@ class LSLMarkerNamesViewer:
         self.set_status(f"Found {len(self.streams)} LSL stream(s). Select one to view marker names.")
 
     def show_selected_stream_markers(self):
+        """Display marker names for the selected LSL stream.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Opens a temporary inlet, reads full stream metadata, fills the
+            marker listbox with extracted labels, and updates GUI status.
+        """
         self.marker_listbox.delete(0, tk.END)
 
         selection = self.stream_listbox.curselection()
@@ -93,6 +149,19 @@ class LSLMarkerNamesViewer:
         self.set_status(f"Showing {len(marker_names)} marker name(s) from '{stream.name()}'.")
 
     def _extract_marker_names(self, stream_info):
+        """Extract marker labels from an LSL stream description.
+
+        Parameters
+        ----------
+        stream_info : pylsl.StreamInfo
+            Full stream metadata object returned by an inlet.
+
+        Returns
+        -------
+        list of str
+            Marker labels from a ``markers`` block, channel metadata, or
+            generated defaults inferred from channel grouping.
+        """
         names = self._extract_marker_names_from_markers(stream_info)
         if len(names) > 0:
             return names
@@ -128,6 +197,18 @@ class LSLMarkerNamesViewer:
         return []
 
     def _extract_marker_names_from_markers(self, stream_info):
+        """Read marker labels from the stream metadata ``markers`` node.
+
+        Parameters
+        ----------
+        stream_info : pylsl.StreamInfo
+            Full stream metadata that may contain marker child nodes.
+
+        Returns
+        -------
+        list of str
+            Marker labels found in metadata, or an empty list if unavailable.
+        """
         names = []
         try:
             markers = stream_info.desc().child("markers")
@@ -142,9 +223,32 @@ class LSLMarkerNamesViewer:
         return names
 
     def _default_marker_names(self, n_markers):
+        """Generate fallback labels for unnamed markers.
+
+        Parameters
+        ----------
+        n_markers : int
+            Number of labels to create.
+
+        Returns
+        -------
+        list of str
+            Labels named ``Marker_1`` through ``Marker_N``.
+        """
         return [f"Marker_{i + 1}" for i in range(n_markers)]
 
     def on_close(self):
+        """Close the marker-name viewer window.
+
+        Parameters
+        ----------
+        None.
+
+        Returns
+        -------
+        None.
+            Destroys the Tk root window.
+        """
         self.root.destroy()
 
 
