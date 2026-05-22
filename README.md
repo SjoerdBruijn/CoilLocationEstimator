@@ -81,14 +81,16 @@ Run the realtime LSL GUI directly:
 ```sh
 python src/realtimeGUI.py
 ```
+Note; to put either qualisys or vicon data on an lsl stream, use scripts that can be found here; 
+https://github.com/SjoerdBruijn/StepuP_setup/tree/main/sync_scripts (developed by the Great Julius Welzel!)
 
 Typical workflow:
-
-1. Select a coil reference C3D file and create or load the coil data structure.
-2. Select a head reference C3D file and create or load the head reference data
+1. make sure you have a datastream set up from vicon or qualisys to lsl (see above)
+2. Select a coil reference C3D file and create or load the coil data structure.
+3. Select a head reference C3D file and create or load the head reference data
    structure.
-3. Connect to an LSL marker stream.
-4. Start **Live View**.
+4. Connect to an LSL marker stream.
+5. Start **Live View**.
 
 The realtime GUI expects the same marker names to be available in the LSL stream
 metadata or inferred from channel order.
