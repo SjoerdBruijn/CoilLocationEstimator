@@ -102,7 +102,9 @@ class AnimationApp:
         self.ax2 = self.fig.add_subplot(122, projection='3d')  # 3D subplot
 
         # Time series data
-        self.line = self.ax1.plot(self.dist, label='Distance between two coil midpoints')
+        self.line = self.ax1.plot(self.dist)
+        for line, label in zip(self.line, ("X distance", "Y distance", "Z distance")):
+            line.set_label(label)
         self.current_time_line = self.ax1.axvline(self.current_frame, color='k', linestyle='--', linewidth=1)
         self.ax1.set_title('Time Series Plot')
         self.ax1.set_xlabel('Time (samples)')
@@ -210,7 +212,7 @@ class AnimationApp:
             None: Mutates the ``distance_text`` StringVar.
         """
         distance = self._compute_euclidean_distance(self.current_frame)
-        self.distance_text.set(f"eucledian distance: {distance:.2f} mm")
+        self.distance_text.set(f"Euclidean distance: {distance:.2f} mm")
 
     def _create_marker_texts(self):
         """
