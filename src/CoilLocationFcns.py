@@ -6,7 +6,10 @@ Created on Mon Oct 14 14:37:40 2024
 @author: sjoerdbruijn
 """
 from ezc3d import c3d
-from MarkerSelectionGui import MarkerSelector
+try:
+    from .MarkerSelectionGui import MarkerSelector
+except ImportError:
+    from MarkerSelectionGui import MarkerSelector
 import json
 import numpy as np
 

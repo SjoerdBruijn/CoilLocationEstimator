@@ -3,6 +3,12 @@ import os
 backend = os.environ.get("COIL_ANIMATION_BACKEND", "matplotlib").strip().lower()
 
 if backend in {"pyvista", "pyvistaqt", "qt"}:
-    from PyVistaAnimationApp import AnimationApp
+    try:
+        from .PyVistaAnimationApp import AnimationApp
+    except ImportError:
+        from PyVistaAnimationApp import AnimationApp
 else:
-    from CoilLocationAnimationApp import AnimationApp
+    try:
+        from .CoilLocationAnimationApp import AnimationApp
+    except ImportError:
+        from CoilLocationAnimationApp import AnimationApp

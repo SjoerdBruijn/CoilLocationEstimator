@@ -5,7 +5,7 @@ Created on Thu Sep  5 11:08:59 2024
 
 @author: sjoerdbruijn
 """
-from CoilLocationFcns import rigidbodytransform
+from src.CoilLocationFcns import rigidbodytransform
 import numpy as np
 
 np.random.seed(1235)

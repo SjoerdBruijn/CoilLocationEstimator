@@ -33,13 +33,11 @@ Date: 2024-10-14
 
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 from ezc3d import c3d
-import CoilLocationFcns as clf
-from CoilLocationGUI import EstimatorGUI
-from AnimationBackend import AnimationApp 
-
+from src import CoilLocationFcns as clf
+from src.AnimationBackend import AnimationApp 
+from src.combinedGUI import CombinedGUI
 # Reference C3D file and marker names
 reffilename = "Jen Cal 05.c3d"
 coilmarkernames = ['LHELM', 'RHELM', 'REARHELM1']
@@ -63,4 +61,4 @@ coildisplacement, coildatastructure = clf.get_coil_displacement(
 AnimationApp(coildisplacement)
 
 # Optionally launch the GUI (uncomment to use)
-EstimatorGUI()
+CombinedGUI()

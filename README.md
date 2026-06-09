@@ -55,15 +55,15 @@ backend instead:
 COIL_ANIMATION_BACKEND=pyvista python MainExamples.py
 ```
 
-### Offline GUI
+### Combined GUI (Offline + Realtime)
 
-Run the offline estimator GUI directly:
+Run the combined GUI directly:
 
 ```sh
-python src/CoilLocationGUI.py
+python src/combinedGUI.py
 ```
 
-Typical workflow:
+Typical offline workflow:
 
 1. Select a coil reference C3D file.
 2. Create, load, or save the coil data structure.
@@ -74,12 +74,10 @@ Typical workflow:
 7. Optionally enable **Save Results** before showing data to save the computed
    displacement and reference data to JSON.
 
-### Realtime GUI
-
-Run the realtime LSL GUI directly:
+Run the realtime mode from the same combined GUI:
 
 ```sh
-python src/realtimeGUI.py
+python src/combinedGUI.py
 ```
 Note; to put either qualisys or vicon data on an lsl stream, use scripts that can be found here; 
 https://github.com/SjoerdBruijn/StepuP_setup/tree/main/sync_scripts (developed by the Great Julius Welzel!)
@@ -92,12 +90,12 @@ Typical workflow:
 4. Connect to an LSL marker stream.
 5. Start **Live View**.
 
-The realtime GUI expects the same marker names to be available in the LSL stream
+The realtime mode expects the same marker names to be available in the LSL stream
 metadata or inferred from channel order.
 
 ### Testing Realtime With C3DToLSLStreamer
 
-You can test the realtime GUI without a motion-capture system by replaying a C3D
+You can test the realtime mode without a motion-capture system by replaying a C3D
 file over LSL with the included streamer app.
 
 In one terminal:
@@ -109,10 +107,10 @@ python src/C3DToLSLStreamer.py
 Select a C3D file and click **Start Streaming**. Then, in another terminal, run:
 
 ```sh
-python src/realtimeGUI.py
+python src/combinedGUI.py
 ```
 
-Click **Connect to LSL** in the realtime GUI and use the streamed C3D data as
+Click **Connect to LSL** in the combined GUI and use the streamed C3D data as
 the live marker source.
 
 ### Marker Names Utility
@@ -142,8 +140,7 @@ python TestKabsch.py
 - `MainExamples.py` - Scripted example for coil location estimation and animation.
 - `TestKabsch.py` - Test script for the rigid-body transform implementation.
 - `src/CoilLocationFcns.py` - Core marker selection, reference-data, displacement, and save/load functions.
-- `src/CoilLocationGUI.py` - Offline GUI.
-- `src/realtimeGUI.py` - Realtime LSL GUI.
+- `src/combinedGUI.py` - Combined offline and realtime LSL GUI.
 - `src/C3DToLSLStreamer.py` - Small app for replaying C3D marker data over LSL.
 - `src/CoilLocationAnimationApp.py` - Matplotlib/Tk animation backend.
 - `src/PyVistaAnimationApp.py` - Optional PyVista/Qt animation backend.
