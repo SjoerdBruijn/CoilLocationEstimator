@@ -28,7 +28,6 @@ pip install -r requirements.txt
 - matplotlib
 - numpy
 - pylsl
-- pyvista, pyvistaqt, PyQt5, and qtpy for the optional PyVista/Qt animation backend
 
 Tkinter is also used by the GUIs. It is included with many Python installs, but
 some Python distributions require installing Tk support separately.
@@ -47,13 +46,6 @@ Update the C3D filenames and marker names in `MainExamples.py` before running it
 on your own data. The example creates a coil data structure, creates head
 reference data, computes displacement for an experimental file, and opens the
 animation app.
-
-By default the animation uses the Matplotlib/Tk backend. To use the PyVista/Qt
-backend instead:
-
-```sh
-COIL_ANIMATION_BACKEND=pyvista python MainExamples.py
-```
 
 ### Combined GUI (Offline + Realtime)
 
@@ -93,7 +85,7 @@ Typical workflow:
 The realtime mode expects the same marker names to be available in the LSL stream
 metadata or inferred from channel order.
 
-### Testing Realtime With C3DToLSLStreamer
+### Testing Realtime With LSLHelper Streamer
 
 You can test the realtime mode without a motion-capture system by replaying a C3D
 file over LSL with the included streamer app.
@@ -101,7 +93,7 @@ file over LSL with the included streamer app.
 In one terminal:
 
 ```sh
-python src/C3DToLSLStreamer.py
+python src/LSLHelper.py streamer
 ```
 
 Select a C3D file and click **Start Streaming**. Then, in another terminal, run:
@@ -118,13 +110,13 @@ the live marker source.
 To inspect marker names advertised by an LSL stream:
 
 ```sh
-python src/LSLMarkerNamesViewer.py
+python src/LSLHelper.py viewer
 ```
 
 or from the command line:
 
 ```sh
-python src/LSLMarkerNamesCLI.py --list-streams
+python src/LSLHelper.py --list-streams
 ```
 
 ### Kabsch Test
@@ -141,15 +133,13 @@ python TestKabsch.py
 - `TestKabsch.py` - Test script for the rigid-body transform implementation.
 - `src/CoilLocationFcns.py` - Core marker selection, reference-data, displacement, and save/load functions.
 - `src/combinedGUI.py` - Combined offline and realtime LSL GUI.
-- `src/C3DToLSLStreamer.py` - Small app for replaying C3D marker data over LSL.
-- `src/CoilLocationAnimationApp.py` - Matplotlib/Tk animation backend.
-- `src/PyVistaAnimationApp.py` - Optional PyVista/Qt animation backend.
-- `src/AnimationBackend.py` - Backend selector controlled by `COIL_ANIMATION_BACKEND`.
+- `src/LSLHelper.py` - Unified LSL helper module (marker-name viewer, marker-name CLI, and C3D streamer).
+- `src/CoilLocationAnimationApp.py` - Matplotlib/Tk animation app.
 - `requirements.txt` - Python dependencies.
 
 ## Notes
 
-- Coil data structures and head reference data can be saved as JSON from both GUIs.
+- Coil data structures and head reference data can be saved as JSON from GUI.
 - Plain coil data saves intentionally omit head reference samples; save head
   reference data separately when you want to reuse a head reference.
 - If you add dependencies, update `requirements.txt`.

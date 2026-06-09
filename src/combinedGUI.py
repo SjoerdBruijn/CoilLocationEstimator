@@ -4,10 +4,10 @@
 """Combined offline + realtime coil location GUI."""
 
 try:
-    from .AnimationBackend import AnimationApp
+    from .CoilLocationAnimationApp import AnimationApp
     from . import CoilLocationFcns as clf
 except ImportError:
-    from AnimationBackend import AnimationApp
+    from CoilLocationAnimationApp import AnimationApp
     import CoilLocationFcns as clf
 
 import numpy as np

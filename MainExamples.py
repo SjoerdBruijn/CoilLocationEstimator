@@ -36,7 +36,7 @@ import os
 
 from ezc3d import c3d
 from src import CoilLocationFcns as clf
-from src.AnimationBackend import AnimationApp 
+from src.CoilLocationAnimationApp import AnimationApp
 from src.combinedGUI import CombinedGUI
 # Reference C3D file and marker names
 reffilename = "Jen Cal 05.c3d"

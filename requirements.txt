@@ -2,7 +2,3 @@ ezc3d
 matplotlib
 numpy
 pylsl
-pyvista
-pyvistaqt
-PyQt5
-qtpy
